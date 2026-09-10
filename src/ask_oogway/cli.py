@@ -10,8 +10,7 @@ from .runner import ask
 
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
-        self.print_usage(sys.stderr)
-        print(f"{self.prog}: error: {message}", file=sys.stderr)
+        print(f"{self.prog}: {message}", file=sys.stderr)
         print(f"Try '{self.prog} --help' for more information.", file=sys.stderr)
         sys.exit(2)
 
@@ -68,7 +67,7 @@ def main() -> None:
         prompt = sys.stdin.read().strip()
 
     if not prompt:
-        parser.error('no prompt given: use -m/--message "..." or pipe via stdin')
+        parser.error("missing message")
 
     try:
         answer = ask(prompt)
