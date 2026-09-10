@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: README / Usage
+    url: https://github.com/yesvus/ask-oogway
+    about: Check usage, config (`ask-oogway init`, `~/.config/ask-oogway/config.toml`), and the read-only contract before filing.

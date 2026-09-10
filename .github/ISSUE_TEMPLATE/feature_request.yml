@@ -1,0 +1,63 @@
+name: Feature / enhancement
+description: CLI flag, UX, background/history/outputs, config, or robustness idea
+labels: [enhancement]
+title: "[feat]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The provider agent is locked to read-only tools (`Read,Glob,Grep,WebSearch,WebFetch` — no writes, bash, or MCP writes). Persistence (`-o`, `outputs/`, `history`, `ps`) must therefore be CLI-side, not agent-side. Status/heartbeats must go to stderr so stdout stays clean-pipeable.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What were you trying to do when you hit this gap? (long web-research, background poll, scripting, agent use…)
+      placeholder: |
+        Kicked off a 13-min web-research question in the background with setsid+nohup and stdout redirected to /tmp. Could not tell if it was working or wedged, and had to hand-roll polling.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should `ask-oogway` do? Include CLI shape if relevant (`-o`, `--quiet`, `--json`, `ps`, `outputs`, `history`, `run`…).
+      placeholder: |
+        Add `ask-oogway ps` (pid, start, elapsed, truncated prompt) and `ask-oogway outputs [dir]` honoring the outputs-folder convention.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Pick the closest — maintainers apply `area:` labels for triage.
+      options:
+        - CLI flags / output (-o, --quiet, --json, -m/stdin)
+        - Status / UX (heartbeat, "pondering…")
+        - Background / jobs / outputs / history (ps, run, detach)
+        - Config / init / auto-detect
+        - Robustness (errors, timeout, empty output)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: stdout / stderr contract
+      description: Does stdout stay clean-pipeable (answer only)? Does status go to stderr? Does `-o` tee vs redirect? How does `--quiet` / `--raw` / `--json` interact?
+      placeholder: Status to stderr only; output file contains answer only; `--quiet` = file + nothing on stdout.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds today (shell redirection, `ps aux | grep oogway`, `setsid`/`nohup`) and why they fall short.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested priority (maintainers decide)
+      description: high = hang/crash/silent-failure/wedged; medium = core gap with workaround; low = nice-to-have/brainstorm.
+      options:
+        - Not sure
+        - high
+        - medium
+        - low
+      default: Not sure

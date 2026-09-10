@@ -1,0 +1,53 @@
+name: Provider support
+description: New provider CLI (chatgpt, codex, …) or direct-API mode
+labels: [enhancement, "area: provider"]
+title: "[provider]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Providers live in `src/ask_oogway/providers/` (one module per provider, wired via `REGISTRY`) and currently shell out to vendor CLIs (e.g. `claude -p --model opus …`). They must stay read-only.
+  - type: dropdown
+    id: which
+    attributes:
+      label: Which provider?
+      description: "'chatgpt' is a stub, 'codex' is missing, direct API bypasses CLIs entirely."
+      options:
+        - chatgpt
+        - codex
+        - direct API (bypass provider CLIs)
+        - other CLI
+    validations:
+      required: true
+  - type: textarea
+    id: invoke
+    attributes:
+      label: How is it invoked?
+      description: CLI binary, non-interactive/print mode flags, model selection, auth/credential check, version command.
+      placeholder: |
+        binary: `codex` on PATH?
+        non-interactive: e.g. `codex exec "…" --model …` (to confirm)
+        model selection: flag name?
+        auth check: what does "not authenticated" look like?
+        version: `codex --version` output
+    validations:
+      required: true
+  - type: textarea
+    id: readonly
+    attributes:
+      label: Read-only lock
+      description: Can it be restricted to read/search/web only (no writes, bash, MCP writes)? `claude` uses `--restricted --strict-mcp-config --tools=Read,Glob,Grep,WebSearch,WebFetch`. What is the equivalent here?
+  - type: textarea
+    id: why
+    attributes:
+      label: Why CLI vs direct API?
+      description: When is the CLI unavailable or too heavy? Needs stdlib-only (no new dependencies) unless justified.
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample session
+      description: Paste a minimal manual run (command, stdout, stderr, exit code).
+      render: shell
+      placeholder: |
+        $ <provider CLI> -p "hi" …
+        <output>

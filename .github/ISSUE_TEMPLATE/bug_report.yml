@@ -1,0 +1,103 @@
+name: Bug report
+description: Something broke, hung, crashed, or silently did the wrong thing
+labels: [bug]
+title: "[bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. `ask-oogway` only asks — the provider agent is read-only by design (no writes, bash, or MCP writes), so persistence/background bugs are CLI-side.
+        Please redact secrets from prompts, stdin context, and logs. History/prompts can contain secrets.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you run, what did you get, and why is that wrong? (hang, traceback, empty output, generic error, wedged with no status…)
+      placeholder: |
+        Ran `ask-oogway -m "should I use X or Y?"`, waited 5 min with no output, had to Ctrl-C.
+        Expected: clean `ask-oogway: …` error or status on stderr.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Exact command. Use `-m "…"` vs piped stdin explicitly — a bare invocation never fires on purpose.
+      placeholder: |
+        ask-oogway -m "should I use a queue or cron here?"
+        # or:
+        echo "long context" | ask-oogway -m "summarize this"
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      description: Value of `provider` in `~/.config/ask-oogway/config.toml` (`ask-oogway init` writes it).
+      options:
+        - claude
+        - chatgpt (stub, not implemented yet)
+        - codex (not implemented yet)
+        - other / direct API
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ask-oogway version
+      description: Output of `ask-oogway --version`.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: provider-cli
+    attributes:
+      label: Provider CLI version
+      description: E.g. output of `claude --version`. Put `n/a` for direct-API issues.
+      placeholder: e.g. `claude --version` output, or `n/a`
+  - type: input
+    id: env
+    attributes:
+      label: Python / OS / shell
+      description: Python version, OS, shell (`uv tool install --editable .` install?).
+      placeholder: Python 3.12, Ubuntu 24.04, zsh
+  - type: textarea
+    id: config
+    attributes:
+      label: Config (redacted)
+      description: Paste `~/.config/ask-oogway/config.toml`. Redact any secrets.
+      placeholder: |
+        provider = "claude"
+      render: toml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stderr / exit code
+      description: Paste stderr, exit code, duration, and whether it hung. Keep stdout vs stderr distinct — stdout must stay clean-pipeable.
+      placeholder: |
+        exit code: 1
+        duration: ~40s, hung, had to Ctrl-C
+        stderr:
+        ask-oogway: claude exited with 1: …
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead? (clean AskOogwayError, timeout, warning on empty output, status on stderr…)
+      placeholder: |
+        Clean `ask-oogway: invalid config.toml: …` instead of a traceback.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I redacted secrets from the prompt, stdin, config, and logs
+          required: true
+        - label: I searched existing issues for duplicates
+          required: true
+        - label: I tried the provider CLI directly (e.g. `claude -p "hi"`) to rule out provider-side failure
+          required: false
