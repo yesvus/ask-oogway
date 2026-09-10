@@ -16,3 +16,6 @@ question needs in the message itself.
 Only use this for genuinely hard or important questions, not routine ones.
 Each call costs real money. If you'd answer confidently without help, don't
 use it.
+
+ask-oogway is read-only: it can search and read, but it cannot write files,
+run commands, or change anything. It only ever answers.

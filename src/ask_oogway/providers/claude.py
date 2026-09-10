@@ -6,11 +6,27 @@ from ..errors import AskOogwayError
 
 _MODEL = "opus"
 
+# ask-oogway only asks. It must never be able to write files, run
+# commands, or otherwise change anything, including via MCP tools -
+# only read-only tools (file reading, search, web) are allowed.
+_READONLY_TOOLS = "Read,Glob,Grep,WebSearch,WebFetch"
+
+_ARGS = [
+    "claude",
+    "-p",
+    "--model",
+    _MODEL,
+    "--restricted",
+    "--strict-mcp-config",
+    f"--tools={_READONLY_TOOLS}",
+    f"--allowedTools={_READONLY_TOOLS}",
+]
+
 
 def ask(prompt: str) -> str:
     try:
         result = subprocess.run(
-            ["claude", "-p", "--model", _MODEL, prompt],
+            [*_ARGS, prompt],
             capture_output=True,
             text=True,
             check=True,

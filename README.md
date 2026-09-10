@@ -32,6 +32,12 @@ provider = "claude"  # default. also: chatgpt (not implemented yet)
 It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`, so
 Claude Code agents auto-discover ask-oogway without being told about it.
 
+## Read-only
+
+ask-oogway only asks. It can read files, search, and use the web, but it
+cannot write files, run commands, or use any MCP tool, so a question can
+never turn into a change.
+
 ## Stack
 
 Python 3.12+, uv, stdlib only. Requires `claude` CLI on PATH.
