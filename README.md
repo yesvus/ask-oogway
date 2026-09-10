@@ -3,26 +3,12 @@
 Simple CLI tool for saving tokens by using expensive models only for hard
 questions/decisions.
 
-Give your cheap-model agents one command to escalate to a stronger model
-when they hit something hard, instead of teaching every agent how to call
-that model's CLI directly.
-
 ## Usage
 
 ```sh
 ask-oogway -m "should I use a queue or a cron job here?"
-echo "some long context piped from stdin" | ask-oogway
+echo "some long context" | ask-oogway
 ```
-
-`-m`/`--message` is required (unless piping via stdin) — a bare `ask-oogway`
-call, or one missing the flag, fails with a usage error instead of silently
-firing a request. The question must be passed as a single quoted argument;
-unquoted multi-word input is also rejected with a usage error. This is
-deliberate: strong models are expensive, and the point of this tool is that
-accidental or malformed calls never reach one.
-
-Exits non-zero and prints an error to stderr if the underlying model CLI is
-missing or fails.
 
 ## Install
 
@@ -34,15 +20,11 @@ cd ask-oogway
 uv tool install --editable .
 ```
 
-Installs `ask-oogway` onto your PATH.
+## Stack
 
-## Tech stack
-
-- Python 3.12+, packaged and installed with [uv](https://docs.astral.sh/uv/)
-- No runtime dependencies — stdlib only (`argparse`, `subprocess`)
-- Requires the underlying model CLI on PATH (not bundled)
+Python 3.12+, uv, stdlib only. Requires the underlying model CLI on PATH.
 
 ## Layout
 
-- `src/ask_oogway/cli.py` — argument parsing, stdin fallback, entrypoint
-- `src/ask_oogway/runner.py` — the subprocess call to the underlying model CLI
+- `src/ask_oogway/cli.py` — argument parsing, entrypoint
+- `src/ask_oogway/runner.py` — the subprocess call
