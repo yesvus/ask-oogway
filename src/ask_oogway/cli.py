@@ -8,8 +8,16 @@ from .errors import AskOogwayError
 from .runner import ask
 
 
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        print(f"{self.prog}: error: {message}", file=sys.stderr)
+        print(f"Try '{self.prog} --help' for more information.", file=sys.stderr)
+        sys.exit(2)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="ask-oogway",
         description="are you unsure? ask-oogway",
         epilog=(
