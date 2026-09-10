@@ -1,7 +1,7 @@
 [project]
 name = "ask-oogway"
 version = "0.1.0"
-description = "Thin CLI wrapper so cheap-model agents can consult Opus for hard tasks or important decisions"
+description = "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
