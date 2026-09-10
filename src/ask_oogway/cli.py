@@ -23,8 +23,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "prompt",
-        nargs="*",
-        help="The question or task. Reads from stdin if omitted.",
+        nargs="?",
+        help=(
+            'The question or task, as ONE quoted argument '
+            '(e.g. "should I use X or Y?"). Reads from stdin if omitted.'
+        ),
     )
     parser.add_argument(
         "--model",
@@ -43,7 +46,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    prompt = " ".join(args.prompt).strip()
+    prompt = (args.prompt or "").strip()
     if not prompt and not sys.stdin.isatty():
         prompt = sys.stdin.read().strip()
 
