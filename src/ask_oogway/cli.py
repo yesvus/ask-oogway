@@ -13,6 +13,13 @@ def build_parser() -> argparse.ArgumentParser:
             "Ask a stronger Claude model for help with a hard task or "
             "decision, without hand-rolling the `claude` CLI invocation."
         ),
+        epilog=(
+            'Examples:\n'
+            '  ask-oogway "should I use a queue or a cron job here?"\n'
+            '  echo "long context" | ask-oogway\n'
+            '  ask-oogway --model sonnet "quick question"'
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "prompt",
@@ -29,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     parser = build_parser()
+
+    if sys.argv[1:2] == ["help"]:
+        parser.print_help()
+        return
+
     args = parser.parse_args()
 
     prompt = " ".join(args.prompt).strip()
