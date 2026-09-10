@@ -15,18 +15,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             'Examples:\n'
-            '  ask-oogway "should I use a queue or a cron job here?"\n'
+            '  ask-oogway -m "should I use a queue or a cron job here?"\n'
             '  echo "long context" | ask-oogway\n'
-            '  ask-oogway --model sonnet "quick question"'
+            '  ask-oogway --model sonnet -m "quick question"'
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "prompt",
-        nargs="?",
+        "-m",
+        "--message",
         help=(
-            'The question or task, as ONE quoted argument '
-            '(e.g. "should I use X or Y?"). Reads from stdin if omitted.'
+            "The question or task, as ONE quoted argument "
+            '(e.g. -m "should I use X or Y?"). Required unless piped via '
+            "stdin. Explicit on purpose, so a bare/accidental invocation "
+            "never reaches Opus."
         ),
     )
     parser.add_argument(
@@ -46,12 +48,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    prompt = (args.prompt or "").strip()
+    prompt = (args.message or "").strip()
     if not prompt and not sys.stdin.isatty():
         prompt = sys.stdin.read().strip()
 
     if not prompt:
-        parser.error("no prompt given (pass as an argument or pipe via stdin)")
+        parser.error('no prompt given: use -m/--message "..." or pipe via stdin')
 
     try:
         answer = ask(prompt, model=args.model)
