@@ -1,0 +1,14 @@
+[project]
+name = "ask-oogway"
+version = "0.1.0"
+description = "Thin CLI wrapper so cheap-model agents can consult Opus for hard tasks or important decisions"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+ask-oogway = "ask_oogway:main"
+
+[build-system]
+requires = ["uv_build>=0.12.11,<0.13.0"]
+build-backend = "uv_build"

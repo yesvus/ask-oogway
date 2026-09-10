@@ -1,0 +1,51 @@
+"""Command-line entrypoint for ask-oogway."""
+
+import argparse
+import sys
+
+from .runner import AskOogwayError, ask
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="ask-oogway",
+        description=(
+            "Ask a stronger Claude model for help with a hard task or "
+            "decision, without hand-rolling the `claude` CLI invocation."
+        ),
+    )
+    parser.add_argument(
+        "prompt",
+        nargs="*",
+        help="The question or task. Reads from stdin if omitted.",
+    )
+    parser.add_argument(
+        "--model",
+        default="opus",
+        help="Model alias or full name to use (default: opus, latest Opus).",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+
+    prompt = " ".join(args.prompt).strip()
+    if not prompt and not sys.stdin.isatty():
+        prompt = sys.stdin.read().strip()
+
+    if not prompt:
+        parser.error("no prompt given (pass as an argument or pipe via stdin)")
+
+    try:
+        answer = ask(prompt, model=args.model)
+    except AskOogwayError as exc:
+        print(f"ask-oogway: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(answer)
+
+
+if __name__ == "__main__":
+    main()
