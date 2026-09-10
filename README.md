@@ -20,11 +20,20 @@ cd ask-oogway
 uv tool install --editable .
 ```
 
+## Config
+
+`~/.config/ask-oogway/config.toml`:
+
+```toml
+provider = "claude"  # default. also: chatgpt (not implemented yet)
+```
+
 ## Stack
 
-Python 3.12+, uv, stdlib only. Requires the underlying model CLI on PATH.
+Python 3.12+, uv, stdlib only. Requires `claude` CLI on PATH.
 
 ## Layout
 
 - `src/ask_oogway/cli.py` — argument parsing, entrypoint
-- `src/ask_oogway/runner.py` — the subprocess call
+- `src/ask_oogway/runner.py` — dispatches to the configured provider
+- `src/ask_oogway/providers/` — one module per provider

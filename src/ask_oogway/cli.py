@@ -4,19 +4,27 @@ import argparse
 import sys
 from importlib.metadata import version
 
-from .runner import AskOogwayError, ask
+from .errors import AskOogwayError
+from .runner import ask
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ask-oogway",
-        description="you don't know? ask oogway.",
+        description="are you unsure? ask-oogway",
         epilog=(
             'Examples:\n'
             '  ask-oogway -m "should I use a queue or a cron job here?"\n'
             '  echo "long context" | ask-oogway'
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
+    )
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="help",
+        help="show this help message",
     )
     parser.add_argument(
         "-m",
@@ -33,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--version",
         action="version",
         version=f"ask-oogway {version('ask-oogway')}",
+        help="show the version",
     )
     return parser
 

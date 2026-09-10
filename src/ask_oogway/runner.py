@@ -1,28 +1,16 @@
-"""Subprocess wrapper around the underlying model CLI."""
+"""Dispatches a prompt to the configured provider."""
 
-import subprocess
-
-_MODEL = "opus"
-
-
-class AskOogwayError(RuntimeError):
-    """Raised when the underlying CLI call fails."""
+from .config import get_provider
+from .errors import AskOogwayError
+from .providers import REGISTRY
 
 
 def ask(prompt: str) -> str:
-    """Run one non-interactive query and return its stdout."""
-    try:
-        result = subprocess.run(
-            ["claude", "-p", "--model", _MODEL, prompt],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except FileNotFoundError as exc:
-        raise AskOogwayError("the underlying CLI was not found on PATH") from exc
-    except subprocess.CalledProcessError as exc:
+    provider = get_provider()
+    handler = REGISTRY.get(provider)
+    if handler is None:
         raise AskOogwayError(
-            f"underlying CLI exited with {exc.returncode}: {exc.stderr.strip()}"
-        ) from exc
-
-    return result.stdout.strip()
+            f"unknown provider '{provider}' in config "
+            f"(known: {', '.join(sorted(REGISTRY))})"
+        )
+    return handler(prompt)
