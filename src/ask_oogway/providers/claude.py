@@ -3,6 +3,7 @@
 import os
 import selectors
 import subprocess
+import sys
 import time
 
 from ..errors import AskOogwayError
@@ -31,6 +32,10 @@ _STALL_TIMEOUT = 300
 # Backstop for pathological trickles. Configurable --timeout lands in #6.
 _ABSOLUTE_TIMEOUT = 1800
 _TAIL_CHARS = 2000
+# First heartbeat after this long with no answer yet, then repeating.
+# Stderr only, so stdout stays clean-pipeable. Suppression flag lands in #6.
+_HEARTBEAT_AFTER = 5
+_HEARTBEAT_EVERY = 30
 
 
 def _tail(text):
@@ -65,6 +70,9 @@ def ask(prompt: str) -> str:
     finished = set()
     start = time.monotonic()
     last_activity = start
+    next_heartbeat = start + _HEARTBEAT_AFTER
+    first_beat = True
+    bytes_received = 0
     try:
         while True:
             if proc.poll() is not None and len(finished) == 2:
@@ -74,7 +82,26 @@ def ask(prompt: str) -> str:
             total = now - start
             if idle >= _STALL_TIMEOUT or total >= _ABSOLUTE_TIMEOUT:
                 break
-            quantum = min(_STALL_TIMEOUT - idle, _ABSOLUTE_TIMEOUT - total)
+            if now >= next_heartbeat:
+                if bytes_received >= 1024:
+                    detail = f", {bytes_received / 1024:.1f}KB received"
+                elif bytes_received:
+                    detail = f", {bytes_received}B received"
+                else:
+                    detail = ", no output yet"
+                word = "pondering... " if first_beat else "still pondering... "
+                print(
+                    f"ask-oogway: {word}({int(total)}s elapsed{detail})",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                first_beat = False
+                next_heartbeat = now + _HEARTBEAT_EVERY
+            quantum = min(
+                _STALL_TIMEOUT - idle,
+                _ABSOLUTE_TIMEOUT - total,
+                next_heartbeat - now,
+            )
             if len(finished) == 2:
                 # Pipes are EOF but the process still runs: wait for the
                 # exit itself instead of selecting on an empty selector.
@@ -90,6 +117,7 @@ def ask(prompt: str) -> str:
                     data = b""
                 if data:
                     last_activity = time.monotonic()
+                    bytes_received += len(data)
                     (out_parts if key.data == "stdout" else err_parts).append(data)
                 elif key.data not in finished:
                     sel.unregister(key.fileobj)
