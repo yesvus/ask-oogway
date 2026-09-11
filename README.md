@@ -41,6 +41,10 @@ provider = "claude"  # default. also: chatgpt (not implemented yet)
 It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`, so
 Claude Code agents auto-discover ask-oogway without being told about it.
 
+Omit `provider` (or the whole file) to auto-detect: the first available
+provider CLI on PATH wins (`claude`, then `chatgpt`). Explicit config
+always wins.
+
 ## History
 
 Every call is recorded tool-side, no agent action needed:
