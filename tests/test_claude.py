@@ -28,6 +28,22 @@ case "$FAKE_MODE" in
     echo "boom" >&2
     exit 3
     ;;
+  auth)
+    echo "Error: Not authenticated. Please run /login" >&2
+    exit 1
+    ;;
+  rate-limited)
+    echo "Error 429: rate limit exceeded, retry later" >&2
+    exit 1
+    ;;
+  bad-model)
+    echo "Error: model 'opus' not found" >&2
+    exit 1
+    ;;
+  offline)
+    echo "fetch failed: getaddrinfo ENOTFOUND api.anthropic.com" >&2
+    exit 1
+    ;;
   empty)
     exit 0
     ;;
@@ -100,6 +116,39 @@ class TestClaudeAsk(unittest.TestCase):
                     claude.ask("hi")
         self.assertIn("3", str(cm.exception))
         self.assertIn("boom", str(cm.exception))
+
+    def _classified(self, mode):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            with mock.patch.dict(os.environ, self._env(tmp, mode)):
+                with self.assertRaises(AskOogwayError) as cm:
+                    claude.ask("hi")
+        return str(cm.exception)
+
+    def test_auth_failure_hint(self):
+        msg = self._classified("auth")
+        self.assertIn("auth failed", msg)
+        self.assertIn("claude login", msg)
+        self.assertIn("Not authenticated", msg)
+
+    def test_rate_limit_hint(self):
+        msg = self._classified("rate-limited")
+        self.assertIn("rate-limited", msg)
+        self.assertIn("429", msg)
+
+    def test_model_unavailable_hint(self):
+        msg = self._classified("bad-model")
+        self.assertIn("model unavailable", msg)
+        self.assertIn("not found", msg)
+
+    def test_network_error_hint(self):
+        msg = self._classified("offline")
+        self.assertIn("network error", msg)
+        self.assertIn("ENOTFOUND", msg)
+
+    def test_unmatched_stderr_stays_generic(self):
+        msg = self._classified("fail")
+        self.assertIn("claude exited with 3: boom", msg)
 
     def test_empty_output(self):
         with tempfile.TemporaryDirectory() as tmp:

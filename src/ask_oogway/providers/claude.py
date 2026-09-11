@@ -45,6 +45,82 @@ def _tail(text):
     return text
 
 
+# Substring rules for common provider failure modes, checked in order.
+# Each alternative is a tuple of markers that must ALL appear. Heuristic
+# on purpose: the raw stderr is always included, so a miss only costs
+# the hint, never the evidence. Extend as real samples arrive.
+_ERROR_HINTS = [
+    (
+        "auth failed",
+        "run `claude login` and retry",
+        [
+            ("not authenticated",),
+            ("not logged in",),
+            ("invalid api key",),
+            ("unauthorized",),
+            ("authentication failed",),
+            (" 401",),
+            ("(401",),
+            ("login required",),
+            ("please log in",),
+        ],
+    ),
+    (
+        "rate-limited",
+        "wait and retry",
+        [
+            ("rate limit",),
+            ("rate_limit",),
+            ("429",),
+            ("too many requests",),
+            ("overloaded",),
+            ("capacity",),
+        ],
+    ),
+    (
+        "model unavailable",
+        "the configured model may be wrong or retired",
+        [
+            ("model not found",),
+            ("model unavailable",),
+            ("unknown model",),
+            ("invalid model",),
+            ("no such model",),
+            ("model", "not found"),
+            ("model", "does not exist"),
+        ],
+    ),
+    (
+        "network error",
+        "check connectivity and retry",
+        [
+            ("network",),
+            ("connection",),
+            ("econn",),
+            ("enotfound",),
+            ("eai_again",),
+            ("dns",),
+            ("unreachable",),
+            ("offline",),
+            ("socket hang up",),
+            ("fetch failed",),
+            ("timed out",),
+        ],
+    ),
+]
+
+
+def _describe_exit(code, stderr):
+    lowered = stderr.lower()
+    for label, hint, alternatives in _ERROR_HINTS:
+        if any(all(m in lowered for m in alt) for alt in alternatives):
+            lines = stderr.strip().splitlines()
+            quoted = lines[0].strip()[:300] if lines else ""
+            msg = f"claude {label} (exit {code}): {hint}"
+            return msg + (f". Provider said: {quoted}" if quoted else "")
+    return f"claude exited with {code}: {stderr.strip()}"
+
+
 def ask(prompt: str) -> str:
     try:
         proc = subprocess.Popen(
@@ -141,9 +217,7 @@ def ask(prompt: str) -> str:
                 "and was killed" + (f". Partial output:\n{partial}" if partial else "")
             )
         if proc.returncode != 0:
-            raise AskOogwayError(
-                f"claude exited with {proc.returncode}: {stderr.strip()}"
-            )
+            raise AskOogwayError(_describe_exit(proc.returncode, stderr))
         answer = stdout.strip()
         if not answer:
             detail = stderr.strip()
