@@ -106,7 +106,94 @@ def prune(keep: int = 50) -> None:
             continue
     items.sort(key=lambda item: (item[0], item[1]))
     for _, _, d in items[: max(0, len(items) - keep)]:
+        try:
+            meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        else:
+            if isinstance(meta, dict) and meta.get("status") == "running":
+                continue
         shutil.rmtree(d, ignore_errors=True)
+
+
+def begin(prompt: str, provider: str) -> dict | None:
+    now = datetime.now().astimezone()
+    record_id = now.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+    record_dir = HISTORY_DIR / record_id
+    try:
+        record_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    try:
+        os.chmod(HISTORY_DIR, 0o700)
+    except OSError:
+        pass
+    meta = {
+        "id": record_id,
+        "timestamp": now.isoformat(timespec="seconds"),
+        "duration_s": None,
+        "provider": provider,
+        "status": "running",
+        "error": None,
+        "pid": None,
+    }
+    try:
+        (record_dir / "input.txt").write_text(prompt, encoding="utf-8")
+        (record_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    except OSError:
+        return None
+    return {"id": record_id, "dir": str(record_dir)}
+
+
+def set_pid(record_id: str, pid: int) -> bool:
+    record_dir = HISTORY_DIR / record_id
+    meta_path = record_dir / "meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(meta, dict):
+        return False
+    meta["pid"] = pid
+    try:
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+def finish(
+    record_id: str,
+    *,
+    duration: float,
+    answer: str = "",
+    error: str | None = None,
+    pid: int | None = None,
+) -> bool:
+    record_dir = HISTORY_DIR / record_id
+    meta_path = record_dir / "meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(meta, dict):
+        return False
+    meta["duration_s"] = round(duration, 1)
+    meta["status"] = "error" if error is not None else "ok"
+    meta["error"] = error
+    meta["pid"] = pid
+    try:
+        (record_dir / "output.txt").write_text(
+            answer if error is None else "", encoding="utf-8"
+        )
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    except OSError:
+        return False
+    try:
+        prune()
+    except OSError:
+        pass
+    return True
 
 
 def main(argv: list[str]) -> int:

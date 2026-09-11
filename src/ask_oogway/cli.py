@@ -1,10 +1,14 @@
 """Command-line entrypoint for ask-oogway."""
 
 import argparse
+import os
+import secrets
 import sys
+from datetime import datetime
 from importlib.metadata import version
 
 from . import history
+from . import jobs
 from . import wizard
 from .errors import AskOogwayError
 from .runner import ask
@@ -48,6 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "-o",
+        "--output",
+        metavar="PATH",
+        help=(
+            "also tee the answer to PATH; if PATH is a directory, write a "
+            "timestamped file in it"
+        ),
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action="version",
@@ -55,6 +68,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="show the version",
     )
     return parser
+
+
+def _output_path(path: str) -> str:
+    if os.path.isdir(path):
+        return os.path.join(
+            path,
+            f"ask-oogway-{datetime.now().strftime('%Y%m%d-%H%M%S')}-"
+            f"{secrets.token_hex(2)}.txt",
+        )
+    return path
+
+
+def _write_output(path: str, answer: str) -> None:
+    final = _output_path(path)
+    try:
+        with open(final, "w") as f:
+            f.write(answer + "\n")
+    except OSError as exc:
+        raise AskOogwayError(f"cannot write output file {final}: {exc}") from exc
+    print(f"ask-oogway: wrote {final}", file=sys.stderr)
 
 
 def main() -> None:
@@ -74,6 +107,21 @@ def main() -> None:
             sys.exit(code)
         return
 
+    if sys.argv[1:2] == ["run"]:
+        sys.exit(jobs.run_main(sys.argv[2:]))
+
+    if sys.argv[1:2] == ["ps"]:
+        code = jobs.ps_main(sys.argv[2:])
+        if code:
+            sys.exit(code)
+        return
+
+    if sys.argv[1:2] == ["outputs"]:
+        code = jobs.outputs_main(sys.argv[2:])
+        if code:
+            sys.exit(code)
+        return
+
     args = parser.parse_args()
 
     prompt = (args.message or "").strip()
@@ -85,6 +133,8 @@ def main() -> None:
 
     try:
         answer = ask(prompt)
+        if args.output:
+            _write_output(args.output, answer)
     except AskOogwayError as exc:
         print(f"ask-oogway: {exc}", file=sys.stderr)
         sys.exit(1)
