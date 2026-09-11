@@ -1,4 +1,4 @@
-"""Reads the user's provider preference, detecting it when unconfigured."""
+"""Reads the user's provider preference."""
 
 import shutil
 import tomllib
@@ -13,7 +13,8 @@ CONFIG_PATH = Path.home() / ".config" / "ask-oogway" / "config.toml"
 
 def detect_provider() -> str:
     # Walks REGISTRY in order, so its literal order is detection priority.
-    # Binary name defaults to the provider name.
+    # Binary name defaults to the provider name. Called at init time only:
+    # the result is written to config.toml, runtime honors the file.
     for name in REGISTRY:
         if shutil.which(name):
             return name
@@ -22,7 +23,7 @@ def detect_provider() -> str:
 
 def get_provider() -> str:
     if not CONFIG_PATH.exists():
-        return detect_provider()
+        return DEFAULT_PROVIDER
 
     try:
         with CONFIG_PATH.open("rb") as f:
@@ -30,7 +31,4 @@ def get_provider() -> str:
     except tomllib.TOMLDecodeError as exc:
         raise AskOogwayError(f"invalid config.toml at {CONFIG_PATH}: {exc}") from exc
 
-    provider = data.get("provider")
-    if provider is None:
-        return detect_provider()
-    return provider
+    return data.get("provider", DEFAULT_PROVIDER)

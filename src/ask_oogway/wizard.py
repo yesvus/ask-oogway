@@ -4,19 +4,23 @@ import sys
 from importlib import resources
 from pathlib import Path
 
-from .config import CONFIG_PATH
+from .config import CONFIG_PATH, detect_provider
 from .providers import REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
 
 
-def _prompt_choice(question: str, choices: list[str]) -> str:
-    choice_str = "/".join(choices)
+def _prompt_choice(
+    question: str, choices: list[str], default: str | None = None
+) -> str:
+    hint = f" (default: {default})" if default else ""
     while True:
-        answer = input(f"{question} [{choice_str}] ").strip().lower()
+        answer = input(f"{question} [{'/'.join(choices)}]{hint} ").strip().lower()
+        if not answer and default in choices:
+            return default
         if answer in choices:
             return answer
-        print(f"please enter one of: {choice_str}")
+        print(f"please enter one of: {'/'.join(choices)}")
 
 
 def _confirm(question: str, default: bool = True) -> bool:
@@ -31,7 +35,9 @@ def run() -> None:
     print("ask-oogway setup\n")
 
     providers = sorted(REGISTRY)
-    provider = _prompt_choice("which provider?", providers)
+    detected = detect_provider()
+    print(f"detected provider: {detected}")
+    provider = _prompt_choice("which provider?", providers, default=detected)
 
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(f'provider = "{provider}"\n')

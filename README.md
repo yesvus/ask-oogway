@@ -41,9 +41,9 @@ provider = "claude"  # default. also: chatgpt (not implemented yet)
 It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`, so
 Claude Code agents auto-discover ask-oogway without being told about it.
 
-Omit `provider` (or the whole file) to auto-detect: the first available
-provider CLI on PATH wins (`claude`, then `chatgpt`). Explicit config
-always wins.
+`ask-oogway init` detects the available provider CLI and offers it as the
+default; the choice is written down, and runtime honors the file.
+Without config, the default is `claude`.
 
 ## History
 

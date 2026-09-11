@@ -21,14 +21,9 @@ class TestGetProvider(unittest.TestCase):
         patcher = mock.patch.object(config, "CONFIG_PATH", self.config_path)
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.bindir = Path(self._tmp.name) / "bin"
-        self.bindir.mkdir()
-        env_patcher = mock.patch.dict(os.environ, {"PATH": str(self.bindir)})
-        env_patcher.start()
-        self.addCleanup(env_patcher.stop)
 
-    def _write_bin(self, name):
-        path = self.bindir / name
+    def _write_bin(self, bindir, name):
+        path = Path(bindir) / name
         path.write_text("#!/bin/sh\nexit 0\n")
         path.chmod(
             stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
@@ -60,28 +55,30 @@ class TestGetProvider(unittest.TestCase):
         self.assertIn(str(self.config_path), msg)
         self.assertIsInstance(ctx.exception.__cause__, tomllib.TOMLDecodeError)
 
+    def test_missing_config_ignores_path(self):
+        with tempfile.TemporaryDirectory() as bintd:
+            self._write_bin(bintd, "chatgpt")
+            with mock.patch.dict(os.environ, {"PATH": bintd}):
+                self.assertEqual(get_provider(), "claude")
+
     def test_detects_lone_binary(self):
-        self._write_bin("chatgpt")
-        self.assertEqual(get_provider(), "chatgpt")
+        with tempfile.TemporaryDirectory() as bintd:
+            self._write_bin(bintd, "chatgpt")
+            with mock.patch.dict(os.environ, {"PATH": bintd}):
+                self.assertEqual(config.detect_provider(), "chatgpt")
 
     def test_detection_prefers_claude(self):
-        self._write_bin("chatgpt")
-        self._write_bin("claude")
-        self.assertEqual(get_provider(), "claude")
+        with tempfile.TemporaryDirectory() as bintd:
+            self._write_bin(bintd, "chatgpt")
+            self._write_bin(bintd, "claude")
+            with mock.patch.dict(os.environ, {"PATH": bintd}):
+                self.assertEqual(config.detect_provider(), "claude")
 
-    def test_explicit_config_wins_over_detection(self):
-        self._write_bin("claude")
-        self.config_path.write_text('provider = "chatgpt"\n')
-        self.assertEqual(get_provider(), "chatgpt")
-
-    def test_keyless_config_detects(self):
-        self._write_bin("chatgpt")
-        self.config_path.write_text('foo = "bar"\n')
-        self.assertEqual(get_provider(), "chatgpt")
-
-    def test_nothing_detected_falls_back_to_default(self):
-        self.assertEqual(get_provider(), "claude")
-        self.assertEqual(get_provider(), DEFAULT_PROVIDER)
+    def test_detection_falls_back_to_default(self):
+        with tempfile.TemporaryDirectory() as bintd:
+            with mock.patch.dict(os.environ, {"PATH": bintd}):
+                self.assertEqual(config.detect_provider(), "claude")
+                self.assertEqual(config.detect_provider(), DEFAULT_PROVIDER)
 
 
 if __name__ == "__main__":
