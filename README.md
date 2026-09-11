@@ -21,6 +21,14 @@ cd ask-oogway
 uv tool install --editable .
 ```
 
+## Tests
+
+Stdlib `unittest`, no extra deps:
+
+```sh
+uv run python -m unittest discover -s tests -v
+```
+
 ## Config
 
 `ask-oogway init` writes `~/.config/ask-oogway/config.toml`:
