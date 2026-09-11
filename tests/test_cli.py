@@ -47,7 +47,7 @@ class TestMain(unittest.TestCase):
             )
         self.assertIsNone(code)
         self.assertEqual(out, "yo\n")
-        ask_mock.assert_called_once_with("hi")
+        ask_mock.assert_called_once_with("hi", timeout=None, quiet=False)
 
     def test_piped_stdin_prompt(self):
         with mock.patch("ask_oogway.cli.ask", return_value="ok") as ask_mock:
@@ -55,7 +55,7 @@ class TestMain(unittest.TestCase):
                 ["ask-oogway"], io.StringIO("from pipe\n")
             )
         self.assertIsNone(code)
-        ask_mock.assert_called_once_with("from pipe")
+        ask_mock.assert_called_once_with("from pipe", timeout=None, quiet=False)
 
     def test_provider_error_exits_1(self):
         with mock.patch(
@@ -86,6 +86,32 @@ class TestMain(unittest.TestCase):
         self.assertIsNone(code)
         self.assertEqual(out, "yo\n")
         self.assertEqual(err, "")
+
+    def test_timeout_and_quiet_forwarded(self):
+        with mock.patch("ask_oogway.cli.ask", return_value="yo") as ask_mock:
+            code, out, err = self.run_main(
+                ["ask-oogway", "-m", "hi", "--timeout", "45", "--quiet"],
+                _TtyStdin(),
+            )
+        self.assertIsNone(code)
+        self.assertEqual(out, "yo\n")
+        ask_mock.assert_called_once_with("hi", timeout=45, quiet=True)
+
+    def test_timeout_rejects_negative(self):
+        with mock.patch("ask_oogway.cli.ask", return_value="yo") as ask_mock:
+            code, out, err = self.run_main(
+                ["ask-oogway", "-m", "hi", "--timeout", "-5"], _TtyStdin()
+            )
+        self.assertEqual(code, 2)
+        ask_mock.assert_not_called()
+
+    def test_timeout_rejects_non_integer(self):
+        with mock.patch("ask_oogway.cli.ask", return_value="yo") as ask_mock:
+            code, out, err = self.run_main(
+                ["ask-oogway", "-m", "hi", "--timeout", "abc"], _TtyStdin()
+            )
+        self.assertEqual(code, 2)
+        ask_mock.assert_not_called()
 
 
 if __name__ == "__main__":

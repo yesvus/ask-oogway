@@ -129,14 +129,14 @@ class TestHistory(unittest.TestCase):
             tmp = Path(td)
             with mock.patch.object(history, "HISTORY_DIR", tmp):
                 with mock.patch("ask_oogway.runner.get_provider", return_value="stub"):
-                    with mock.patch.object(runner, "REGISTRY", {"stub": lambda p: "ok!"}):
+                    with mock.patch.object(runner, "REGISTRY", {"stub": lambda p, **_: "ok!"}):
                         self.assertEqual(runner.ask("hi"), "ok!")
             dirs = list(tmp.iterdir())
             self.assertEqual(len(dirs), 1)
             self.assertEqual((dirs[0] / "input.txt").read_text(), "hi")
 
     def test_runner_records_failure(self):
-        def boom(p):
+        def boom(p, **_):
             raise AskOogwayError("boom")
 
         with tempfile.TemporaryDirectory() as td:

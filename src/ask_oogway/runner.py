@@ -8,7 +8,7 @@ from .errors import AskOogwayError
 from .providers import REGISTRY
 
 
-def ask(prompt: str) -> str:
+def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
     provider = get_provider()
     handler = REGISTRY.get(provider)
     if handler is None:
@@ -18,7 +18,7 @@ def ask(prompt: str) -> str:
         )
     start = time.monotonic()
     try:
-        answer = handler(prompt)
+        answer = handler(prompt, timeout=timeout, quiet=quiet)
     except AskOogwayError as exc:
         history.record(
             prompt,

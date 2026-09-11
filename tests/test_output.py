@@ -105,6 +105,20 @@ class TestOutput(unittest.TestCase):
                 self.assertEqual(f.read(), "fresh\n")
             self.assertEqual(out, "fresh\n")
 
+    def test_quiet_suppresses_wrote_notice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "answer.md")
+            with mock.patch("ask_oogway.cli.ask", return_value="yo"):
+                code, out, err = self.run_main(
+                    ["ask-oogway", "-m", "hi", "-o", target, "--quiet"],
+                    _TtyStdin(),
+                )
+            self.assertIsNone(code)
+            with open(target) as f:
+                self.assertEqual(f.read(), "yo\n")
+            self.assertEqual(out, "yo\n")
+            self.assertEqual(err, "")
+
 
 if __name__ == "__main__":
     unittest.main()

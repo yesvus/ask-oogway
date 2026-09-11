@@ -3,5 +3,5 @@
 from ..errors import AskOogwayError
 
 
-def ask(prompt: str) -> str:
+def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
     raise AskOogwayError("chatgpt provider isn't implemented yet")

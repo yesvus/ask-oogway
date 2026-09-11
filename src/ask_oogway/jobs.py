@@ -63,7 +63,13 @@ def _child_redirect(record_dir: str) -> str:
     return console
 
 
-def run_detached(prompt: str, output: str | None = None) -> dict:
+def run_detached(
+    prompt: str,
+    output: str | None = None,
+    *,
+    timeout: int | None = None,
+    quiet: bool = False,
+) -> dict:
     if not hasattr(os, "fork"):
         raise AskOogwayError("background runs need fork (unix)")
     try:
@@ -146,7 +152,7 @@ def run_detached(prompt: str, output: str | None = None) -> dict:
         os._exit(1)
     t0 = time.monotonic()
     try:
-        answer = handler(prompt)
+        answer = handler(prompt, timeout=timeout, quiet=quiet)
     except AskOogwayError as exc:
         try:
             history.finish(
@@ -384,9 +390,11 @@ def run_main(argv) -> int:
             prompt = ""
     if not prompt:
         parser.error("missing message")
+    if parsed.timeout is not None and parsed.timeout < 0:
+        parser.error("--timeout must be >= 0 seconds")
     output = getattr(parsed, "output", None)
     try:
-        run_detached(prompt, output)
+        run_detached(prompt, output, timeout=parsed.timeout, quiet=parsed.quiet)
     except AskOogwayError as exc:
         print(f"ask-oogway: {exc}", file=sys.stderr)
         return 1

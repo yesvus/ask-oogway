@@ -11,7 +11,7 @@ class TestAsk(unittest.TestCase):
     def test_unknown_provider(self):
         with (
             patch("ask_oogway.runner.get_provider", return_value="nope"),
-            patch("ask_oogway.runner.REGISTRY", {"stub": lambda p: "x"}),
+            patch("ask_oogway.runner.REGISTRY", {"stub": lambda p, **_: "x"}),
         ):
             with self.assertRaises(AskOogwayError) as cm:
                 ask("hello")
@@ -21,7 +21,7 @@ class TestAsk(unittest.TestCase):
     def test_known_provider_dispatches(self):
         received = []
 
-        def fake(prompt):
+        def fake(prompt, **_):
             received.append(prompt)
             return "stub-response"
 
@@ -34,7 +34,7 @@ class TestAsk(unittest.TestCase):
         self.assertEqual(received, ["hello"])
 
     def test_provider_errors_propagate(self):
-        def fake(prompt):
+        def fake(prompt, **_):
             raise AskOogwayError("boom")
 
         with (
@@ -43,6 +43,20 @@ class TestAsk(unittest.TestCase):
         ):
             with self.assertRaisesRegex(AskOogwayError, "boom"):
                 ask("hello")
+
+    def test_forwards_timeout_and_quiet(self):
+        seen = {}
+
+        def fake(prompt, *, timeout=None, quiet=False):
+            seen.update(prompt=prompt, timeout=timeout, quiet=quiet)
+            return "ok"
+
+        with (
+            patch("ask_oogway.runner.get_provider", return_value="stub"),
+            patch("ask_oogway.runner.REGISTRY", {"stub": fake}),
+        ):
+            self.assertEqual(ask("hi", timeout=45, quiet=True), "ok")
+        self.assertEqual(seen, {"prompt": "hi", "timeout": 45, "quiet": True})
 
 
 if __name__ == "__main__":

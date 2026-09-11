@@ -29,11 +29,12 @@ _ARGS = [
 # Silence this long means stuck, not working. Any stdout/stderr byte
 # resets the clock, so long productive runs survive.
 _STALL_TIMEOUT = 300
-# Backstop for pathological trickles. Configurable --timeout lands in #6.
+# Backstop for pathological trickles. --timeout overrides it (0 disables
+# the ceiling entirely); the stall watchdog still applies.
 _ABSOLUTE_TIMEOUT = 1800
 _TAIL_CHARS = 2000
 # First heartbeat after this long with no answer yet, then repeating.
-# Stderr only, so stdout stays clean-pipeable. Suppression flag lands in #6.
+# Stderr only, so stdout stays clean-pipeable. --quiet suppresses them.
 _HEARTBEAT_AFTER = 5
 _HEARTBEAT_EVERY = 30
 
@@ -121,7 +122,10 @@ def _describe_exit(code, stderr):
     return f"claude exited with {code}: {stderr.strip()}"
 
 
-def ask(prompt: str) -> str:
+def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
+    if timeout is not None and timeout < 0:
+        raise AskOogwayError("--timeout must be >= 0 seconds")
+    ceiling = _ABSOLUTE_TIMEOUT if timeout is None else timeout
     try:
         proc = subprocess.Popen(
             [*_ARGS, prompt],
@@ -156,9 +160,9 @@ def ask(prompt: str) -> str:
             now = time.monotonic()
             idle = now - last_activity
             total = now - start
-            if idle >= _STALL_TIMEOUT or total >= _ABSOLUTE_TIMEOUT:
+            if idle >= _STALL_TIMEOUT or (ceiling > 0 and total >= ceiling):
                 break
-            if now >= next_heartbeat:
+            if not quiet and now >= next_heartbeat:
                 if bytes_received >= 1024:
                     detail = f", {bytes_received / 1024:.1f}KB received"
                 elif bytes_received:
@@ -173,11 +177,12 @@ def ask(prompt: str) -> str:
                 )
                 first_beat = False
                 next_heartbeat = now + _HEARTBEAT_EVERY
-            quantum = min(
-                _STALL_TIMEOUT - idle,
-                _ABSOLUTE_TIMEOUT - total,
-                next_heartbeat - now,
-            )
+            waits = [_STALL_TIMEOUT - idle]
+            if ceiling > 0:
+                waits.append(ceiling - total)
+            if not quiet:
+                waits.append(next_heartbeat - now)
+            quantum = min(waits)
             if len(finished) == 2:
                 # Pipes are EOF but the process still runs: wait for the
                 # exit itself instead of selecting on an empty selector.
@@ -213,7 +218,7 @@ def ask(prompt: str) -> str:
                     + (f". Partial output:\n{partial}" if partial else "")
                 )
             raise AskOogwayError(
-                f"claude timed out after {total}s (limit {_ABSOLUTE_TIMEOUT}s) "
+                f"claude timed out after {total}s (limit {ceiling}s) "
                 "and was killed" + (f". Partial output:\n{partial}" if partial else "")
             )
         if proc.returncode != 0:

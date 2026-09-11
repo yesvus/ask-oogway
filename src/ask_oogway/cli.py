@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
             '  ask-oogway init\n'
             '  ask-oogway -m "should I use a queue or a cron job here?"\n'
             '  echo "long context" | ask-oogway\n'
+            '  ask-oogway -m "..." --quiet --timeout 300\n'
             "  ask-oogway history"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -61,6 +62,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="suppress stderr status output (heartbeats, wrote notices)",
+    )
+    parser.add_argument(
+        "--timeout",
+        metavar="SECONDS",
+        type=int,
+        default=None,
+        help="cap a call at SECONDS total (0 disables the absolute limit)",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action="version",
@@ -80,14 +94,15 @@ def _output_path(path: str) -> str:
     return path
 
 
-def _write_output(path: str, answer: str) -> None:
+def _write_output(path: str, answer: str, quiet: bool = False) -> None:
     final = _output_path(path)
     try:
         with open(final, "w") as f:
             f.write(answer + "\n")
     except OSError as exc:
         raise AskOogwayError(f"cannot write output file {final}: {exc}") from exc
-    print(f"ask-oogway: wrote {final}", file=sys.stderr)
+    if not quiet:
+        print(f"ask-oogway: wrote {final}", file=sys.stderr)
 
 
 def main() -> None:
@@ -124,6 +139,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.timeout is not None and args.timeout < 0:
+        parser.error("--timeout must be >= 0 seconds")
+
     prompt = (args.message or "").strip()
     if not prompt and not sys.stdin.isatty():
         prompt = sys.stdin.read().strip()
@@ -132,9 +150,9 @@ def main() -> None:
         parser.error("missing message")
 
     try:
-        answer = ask(prompt)
+        answer = ask(prompt, timeout=args.timeout, quiet=args.quiet)
         if args.output:
-            _write_output(args.output, answer)
+            _write_output(args.output, answer, quiet=args.quiet)
     except AskOogwayError as exc:
         print(f"ask-oogway: {exc}", file=sys.stderr)
         sys.exit(1)

@@ -206,6 +206,38 @@ class TestClaudeAsk(unittest.TestCase):
         self.assertIn("got", result)
         self.assertLess(elapsed, 10)
 
+    def test_timeout_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            with mock.patch.dict(os.environ, self._env(tmp, "silent")):
+                claude._STALL_TIMEOUT = 100
+                start = time.monotonic()
+                with self.assertRaises(AskOogwayError) as cm:
+                    claude.ask("hi", timeout=2)
+                elapsed = time.monotonic() - start
+        self.assertIn("timed out after 2s (limit 2s)", str(cm.exception))
+        self.assertLess(elapsed, 10)
+
+    def test_timeout_zero_disables_absolute_ceiling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            with mock.patch.dict(os.environ, self._env(tmp, "silent")):
+                with self.assertRaises(AskOogwayError) as cm:
+                    claude.ask("hi", timeout=0)
+        self.assertIn("stalled", str(cm.exception))
+
+    def test_quiet_suppresses_heartbeat(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            claude._HEARTBEAT_AFTER = 1
+            claude._HEARTBEAT_EVERY = 1
+            buf = io.StringIO()
+            with mock.patch.dict(os.environ, self._env(tmp, "silent")):
+                with contextlib.redirect_stderr(buf):
+                    with self.assertRaises(AskOogwayError):
+                        claude.ask("hi", quiet=True)
+            self.assertEqual(buf.getvalue(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
