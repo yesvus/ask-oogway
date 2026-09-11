@@ -116,7 +116,14 @@ def ask(prompt: str) -> str:
             raise AskOogwayError(
                 f"claude exited with {proc.returncode}: {stderr.strip()}"
             )
-        return stdout.strip()
+        answer = stdout.strip()
+        if not answer:
+            detail = stderr.strip()
+            raise AskOogwayError(
+                "claude returned empty output"
+                + (f": {detail}" if detail else "")
+            )
+        return answer
     finally:
         sel.close()
         for pipe in streams.values():
