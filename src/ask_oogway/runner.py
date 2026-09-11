@@ -13,4 +13,7 @@ def ask(prompt: str) -> str:
             f"unknown provider '{provider}' in config "
             f"(known: {', '.join(sorted(REGISTRY))})"
         )
-    return handler(prompt)
+    response = handler(prompt)
+    if not response or not response.strip():
+        raise AskOogwayError(f"provider '{provider}' returned an empty response")
+    return response.strip()

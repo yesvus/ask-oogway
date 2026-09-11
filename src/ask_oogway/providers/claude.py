@@ -38,4 +38,8 @@ def ask(prompt: str) -> str:
             f"claude exited with {exc.returncode}: {exc.stderr.strip()}"
         ) from exc
 
-    return result.stdout.strip()
+    output = result.stdout.strip()
+    if not output:
+        raise AskOogwayError("claude returned an empty response")
+
+    return output
