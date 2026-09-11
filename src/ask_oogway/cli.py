@@ -4,6 +4,7 @@ import argparse
 import sys
 from importlib.metadata import version
 
+from . import history
 from . import wizard
 from .errors import AskOogwayError
 from .runner import ask
@@ -24,7 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
             'Examples:\n'
             '  ask-oogway init\n'
             '  ask-oogway -m "should I use a queue or a cron job here?"\n'
-            '  echo "long context" | ask-oogway'
+            '  echo "long context" | ask-oogway\n'
+            "  ask-oogway history"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         add_help=False,
@@ -64,6 +66,12 @@ def main() -> None:
 
     if sys.argv[1:2] == ["init"]:
         wizard.run()
+        return
+
+    if sys.argv[1:2] == ["history"]:
+        code = history.main(sys.argv[2:])
+        if code:
+            sys.exit(code)
         return
 
     args = parser.parse_args()

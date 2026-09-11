@@ -40,6 +40,23 @@ provider = "claude"  # default. also: chatgpt (not implemented yet)
 It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`, so
 Claude Code agents auto-discover ask-oogway without being told about it.
 
+## History
+
+Every call is recorded tool-side, no agent action needed:
+
+```sh
+ask-oogway history       # last 20 calls, newest first
+ask-oogway history 5     # last 5
+```
+
+Records live under `~/.local/share/ask-oogway/history/` (or
+`$XDG_DATA_HOME`), one dir per call with `input.txt`, `output.txt`, and
+`meta.json` (time, duration, provider, exit status). Only the last 50 are
+kept.
+
+**Warning: the history dir is sensitive, prompts can contain secrets.**
+Persistence is CLI-side on purpose, provider agents are read-only.
+
 ## Read-only
 
 ask-oogway only asks. It can read files, search, and use the web, but it
@@ -55,5 +72,6 @@ Python 3.12+, uv, stdlib only. Requires `claude` CLI on PATH.
 - `src/ask_oogway/cli.py` — argument parsing, entrypoint
 - `src/ask_oogway/wizard.py` — the `init` setup wizard
 - `src/ask_oogway/runner.py` — dispatches to the configured provider
+- `src/ask_oogway/history.py` — tool-side call history store
 - `src/ask_oogway/providers/` — one module per provider
 - `src/ask_oogway/skill/SKILL.md` — installed by `init` for agent discovery
