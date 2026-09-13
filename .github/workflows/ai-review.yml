@@ -2,6 +2,8 @@ name: titiz-bot
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       pr:
@@ -13,11 +15,19 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: titiz-bot-${{ github.event.pull_request.number || inputs.pr }}
+  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
   cancel-in-progress: true
 
 jobs:
   review:
+    # issue_comment leg: only `/titiz` on a PR, by someone with write access.
+    if: >
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/titiz') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
     runs-on: [self-hosted, gurbet]
     timeout-minutes: 35
     steps:
@@ -28,18 +38,18 @@ jobs:
           private-key: ${{ secrets.TITIZ_APP_PRIVATE_KEY }}
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: yesvus/titiz-bot
-          ref: 0530de88878d77c5c32b30ea8ebd1e2488da5cff # v0.1.1
+          ref: 648e6ed8a33632242edf6cf9a1233a5aa2e7dda3 # v0.3.0
           path: titiz-bot
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token }}
       - name: titiz-bot review (zen -> go -> cliproxy cheap)
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
           TITIZ_CONTEXT: "ask-oogway, python CLI (uv), routes questions to provider CLIs to save tokens, stdlib unittest, no secrets in repo"
         run: bash titiz-bot/titiz.sh "$PR_NUMBER"
