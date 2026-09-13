@@ -36,6 +36,12 @@ jobs:
         with:
           app-id: ${{ vars.TITIZ_APP_ID }}
           private-key: ${{ secrets.TITIZ_APP_PRIVATE_KEY }}
+          # default token covers the current repo only; the scripts live in
+          # titiz-bot, so both repos must be listed.
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            titiz-bot
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
