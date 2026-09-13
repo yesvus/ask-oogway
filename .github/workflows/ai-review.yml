@@ -21,6 +21,11 @@ jobs:
     runs-on: [self-hosted, gurbet]
     timeout-minutes: 35
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ vars.TITIZ_APP_ID }}
+          private-key: ${{ secrets.TITIZ_APP_PRIVATE_KEY }}
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -31,10 +36,10 @@ jobs:
           ref: 0530de88878d77c5c32b30ea8ebd1e2488da5cff # v0.1.1
           path: titiz-bot
           persist-credentials: false
-          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
+          token: ${{ steps.app-token.outputs.token }}
       - name: titiz-bot review (zen -> go -> cliproxy cheap)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
           TITIZ_CONTEXT: "ask-oogway, python CLI (uv), routes questions to provider CLIs to save tokens, stdlib unittest, no secrets in repo"
         run: bash titiz-bot/titiz.sh "$PR_NUMBER"
