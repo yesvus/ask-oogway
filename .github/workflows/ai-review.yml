@@ -1,0 +1,40 @@
+name: titiz-bot
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to review"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: titiz-bot-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: [self-hosted, gurbet]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: yesvus/titiz-bot
+          ref: 0530de88878d77c5c32b30ea8ebd1e2488da5cff # v0.1.1
+          path: titiz-bot
+          persist-credentials: false
+          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
+      - name: titiz-bot review (zen -> go -> cliproxy cheap)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          TITIZ_CONTEXT: "ask-oogway, python CLI (uv), routes questions to provider CLIs to save tokens, stdlib unittest, no secrets in repo"
+        run: bash titiz-bot/titiz.sh "$PR_NUMBER"
