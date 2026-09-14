@@ -15,7 +15,9 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+  # non-/titiz comments get a unique group so they never cancel a review in
+  # progress. evaluated at queue time, before the job-level `if` below.
+  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
