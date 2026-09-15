@@ -15,7 +15,9 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+  # non-/titiz comments get a unique group so they never cancel a review in
+  # progress. evaluated at queue time, before the job-level `if` below.
+  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -31,17 +33,6 @@ jobs:
     runs-on: [self-hosted, gurbet]
     timeout-minutes: 35
     steps:
-      - uses: actions/create-github-app-token@v1
-        id: app-token
-        with:
-          app-id: ${{ vars.TITIZ_APP_ID }}
-          private-key: ${{ secrets.TITIZ_APP_PRIVATE_KEY }}
-          # default token covers the current repo only; the scripts live in
-          # titiz-bot, so both repos must be listed.
-          owner: ${{ github.repository_owner }}
-          repositories: |
-            ${{ github.event.repository.name }}
-            titiz-bot
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha || github.sha }}
@@ -49,13 +40,14 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: yesvus/titiz-bot
-          ref: 648e6ed8a33632242edf6cf9a1233a5aa2e7dda3 # v0.3.0
+          ref: 55f01d5627d47dd1b61717b915c6be9323238864 # titiz-bot release tag's commit
           path: titiz-bot
           persist-credentials: false
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
       - name: titiz-bot review (zen -> go -> cliproxy cheap)
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
-          TITIZ_CONTEXT: "ask-oogway, python CLI (uv), routes questions to provider CLIs to save tokens, stdlib unittest, no secrets in repo"
+          TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
         run: bash titiz-bot/titiz.sh "$PR_NUMBER"
+
