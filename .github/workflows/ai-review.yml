@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: yesvus/titiz-bot
-          ref: 55f01d5627d47dd1b61717b915c6be9323238864 # titiz-bot release tag's commit
+          ref: 66f2b3519d4198f655305ca6b4eb0be0e93fbc9f # titiz-bot release tag's commit
           path: titiz-bot
           persist-credentials: false
           token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
@@ -48,6 +48,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+          TITIZ_VERSION: "v0.4.1" # release tag matching PINNED-SHA above, shown in footers
           TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
         run: bash titiz-bot/titiz.sh "$PR_NUMBER"
 
