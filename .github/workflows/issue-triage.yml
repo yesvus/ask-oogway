@@ -1,4 +1,4 @@
-name: titiz-triage
+name: titiz-issue-triage
 on:
   issues:
     types: [opened, reopened]
@@ -8,26 +8,28 @@ permissions:
   issues: write
 
 concurrency:
-  group: titiz-triage-${{ github.event.issue.number }}
+  group: titiz-issue-triage-${{ github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
-  triage:
+  issue-triage:
     runs-on: [self-hosted, gurbet]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: yesvus/titiz-bot
-          ref: cd07185bbc6b2ff68d902c46b550ffc050e6da42 # titiz-bot release tag's commit
+          ref: 2f1278d24f51c38f6c9f6a628e7bf68a6a354a94 # titiz-bot release tag's commit
           path: titiz-bot
           persist-credentials: false
-          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
-      - name: titiz-bot triage (zen -> go -> cliproxy cheap)
+          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, bot repo contents read-only
+      - name: titiz issue-triage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          TITIZ_VERSION: "v0.5.0" # release tag matching PINNED-SHA above, shown in footers
+          TITIZ_VERSION: "v0.6.0" # release tag matching PINNED-SHA above, shown in footers
           TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
-        run: python3 titiz-bot/titiz.py triage "$ISSUE_NUMBER"
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+          uv run --project titiz-bot --frozen titiz issue-triage "$ISSUE_NUMBER"
 

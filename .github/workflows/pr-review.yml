@@ -1,4 +1,4 @@
-name: titiz-bot
+name: titiz-pr-review
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -17,11 +17,11 @@ permissions:
 concurrency:
   # non-/titiz comments get a unique group so they never cancel a review in
   # progress. evaluated at queue time, before the job-level `if` below.
-  group: titiz-bot-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
+  group: titiz-pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 jobs:
-  review:
+  pr-review:
     # issue_comment leg: only `/titiz` on a PR, by someone with write access.
     if: >
       github.event_name != 'issue_comment' ||
@@ -40,15 +40,17 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: yesvus/titiz-bot
-          ref: cd07185bbc6b2ff68d902c46b550ffc050e6da42 # titiz-bot release tag's commit
+          ref: 2f1278d24f51c38f6c9f6a628e7bf68a6a354a94 # titiz-bot release tag's commit
           path: titiz-bot
           persist-credentials: false
-          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, titiz-bot contents read-only
-      - name: titiz-bot review (zen -> go -> cliproxy cheap)
+          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, bot repo contents read-only
+      - name: titiz pr-review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
-          TITIZ_VERSION: "v0.5.0" # release tag matching PINNED-SHA above, shown in footers
+          TITIZ_VERSION: "v0.6.0" # release tag matching PINNED-SHA above, shown in footers
           TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
-        run: python3 titiz-bot/titiz.py review "$PR_NUMBER"
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+          uv run --project titiz-bot --frozen titiz pr-review "$PR_NUMBER"
 
