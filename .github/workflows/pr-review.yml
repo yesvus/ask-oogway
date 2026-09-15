@@ -1,4 +1,7 @@
 name: titiz-pr-review
+# Thin static caller. All logic lives in titiz-bot; version is served
+# centrally via the @ref below (floating v0 = auto-rollout). This file
+# never needs rewiring; only `context` is repo-specific.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -14,43 +17,14 @@ permissions:
   contents: read
   pull-requests: write
 
-concurrency:
-  # non-/titiz comments get a unique group so they never cancel a review in
-  # progress. evaluated at queue time, before the job-level `if` below.
-  group: titiz-pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
-  cancel-in-progress: true
-
 jobs:
   pr-review:
-    # issue_comment leg: only `/titiz` on a PR, by someone with write access.
-    if: >
-      github.event_name != 'issue_comment' ||
-      (github.event.issue.pull_request &&
-       contains(github.event.comment.body, '/titiz') &&
-       (github.event.comment.author_association == 'OWNER' ||
-        github.event.comment.author_association == 'MEMBER' ||
-        github.event.comment.author_association == 'COLLABORATOR'))
-    runs-on: [self-hosted, gurbet]
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: yesvus/titiz-bot
-          ref: 5b5411c615848ae1d234698164344dea25c0d8bb # titiz-bot release tag's commit
-          path: titiz-bot
-          persist-credentials: false
-          token: ${{ secrets.TITIZ_READ_TOKEN }} # fine-grained PAT, bot repo contents read-only
-      - name: titiz pr-review
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
-          TITIZ_VERSION: "v0.7.0" # release tag matching PINNED-SHA above, shown in footers
-          TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
-        run: |
-          export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
-          uv run --project titiz-bot --frozen titiz pr-review "$PR_NUMBER"
+    uses: yesvus/titiz-bot/.github/workflows/reusable-pr-review.yml@v0
+    secrets: inherit
+    with:
+      context: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
+      pr: ${{ inputs.pr }}
+      version: "v0"
+      bot_repo: "yesvus/titiz-bot"
+      runs_on: '["self-hosted", "gurbet"]'
 
