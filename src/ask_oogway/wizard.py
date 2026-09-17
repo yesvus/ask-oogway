@@ -1,5 +1,6 @@
 """Interactive `ask-oogway init` setup wizard."""
 
+import os
 import sys
 from importlib import resources
 from pathlib import Path
@@ -8,6 +9,13 @@ from .config import CONFIG_PATH, detect_provider
 from .providers import REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
+_XDG_CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME")
+_CONFIG_HOME = (
+    Path(_XDG_CONFIG_HOME)
+    if _XDG_CONFIG_HOME and Path(_XDG_CONFIG_HOME).is_absolute()
+    else Path.home() / ".config"
+)
+OPENCODE_SKILL_DEST = _CONFIG_HOME / "opencode" / "skills" / "ask-oogway" / "SKILL.md"
 
 
 def _prompt_choice(
@@ -45,9 +53,10 @@ def run() -> None:
 
     if _confirm("\ninstall the SKILL.md so agents auto-discover ask-oogway?"):
         skill_text = resources.files("ask_oogway.skill").joinpath("SKILL.md").read_text()
-        SKILL_DEST.parent.mkdir(parents=True, exist_ok=True)
-        SKILL_DEST.write_text(skill_text)
-        print(f"installed {SKILL_DEST}")
+        for dest in (SKILL_DEST, OPENCODE_SKILL_DEST):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(skill_text)
+            print(f"installed {dest}")
     else:
         print("skipped")
 

@@ -7,6 +7,7 @@ import sys
 import time
 
 from ..errors import AskOogwayError
+from ..prompts import SYSTEM_PROMPT
 
 _MODEL = "opus"
 
@@ -24,6 +25,8 @@ _ARGS = [
     "--strict-mcp-config",
     f"--tools={_READONLY_TOOLS}",
     f"--allowedTools={_READONLY_TOOLS}",
+    "--append-system-prompt",
+    SYSTEM_PROMPT,
 ]
 
 # Silence this long means stuck, not working. Any stdout/stderr byte
