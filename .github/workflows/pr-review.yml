@@ -1,7 +1,7 @@
 name: titiz-pr-review
-# Thin static caller. All logic lives in titiz-bot; version is served
-# centrally via the @ref below (floating v0 = auto-rollout). This file
-# never needs rewiring; only `context` is repo-specific.
+# Vendored copy of titiz-bot's reusable-pr-review (v0.8.1). This repo is
+# public and titiz-bot is private, so the cross-repo `uses:` caller cannot
+# resolve. Keep the steps in sync with upstream when bumping the pinned ref.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -17,14 +17,39 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: titiz-pr-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '/titiz') && format('-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
 jobs:
   pr-review:
-    uses: yesvus/titiz-bot/.github/workflows/reusable-pr-review.yml@v0
-    secrets: inherit
-    with:
-      context: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
-      pr: ${{ inputs.pr }}
-      version: "v0"
-      bot_repo: "yesvus/titiz-bot"
-      runs_on: '["self-hosted", "gurbet"]'
-
+    # issue_comment leg: only `/titiz` on a PR, by someone with write access.
+    if: >
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/titiz') &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ["self-hosted", "gurbet"]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: yesvus/titiz-bot
+          ref: v0.8.1
+          path: titiz-bot
+          persist-credentials: false
+          token: ${{ secrets.TITIZ_READ_TOKEN }}
+      - name: titiz pr-review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+          TITIZ_CONTEXT: "Simple CLI tool for saving tokens by using expensive models only for hard questions/decisions."
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+          uv run --project titiz-bot --frozen titiz pr-review "$PR_NUMBER"
