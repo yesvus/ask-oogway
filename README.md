@@ -97,4 +97,5 @@ Python 3.12+, uv, stdlib only. Requires `claude` CLI on PATH.
 - `src/ask_oogway/history.py` — tool-side call history store
 - `src/ask_oogway/jobs.py` — detached background runs (`run`/`ps`/`outputs`)
 - `src/ask_oogway/providers/` — one module per provider
+- `src/ask_oogway/prompts/oogway.md` — Oogway character, sent via `--append-system-prompt`
 - `src/ask_oogway/skill/SKILL.md` — installed by `init` for agent discovery
