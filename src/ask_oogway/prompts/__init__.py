@@ -4,7 +4,9 @@ from importlib import resources
 
 
 def load() -> str:
-    return resources.files("ask_oogway.prompts").joinpath("oogway.md").read_text()
+    return (
+        resources.files("ask_oogway.prompts").joinpath("oogway.md").read_text(encoding="utf-8")
+    )
 
 
 SYSTEM_PROMPT = load()

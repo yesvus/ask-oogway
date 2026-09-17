@@ -1,5 +1,6 @@
 """Interactive `ask-oogway init` setup wizard."""
 
+import os
 import sys
 from importlib import resources
 from pathlib import Path
@@ -8,9 +9,8 @@ from .config import CONFIG_PATH, detect_provider
 from .providers import REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
-OPENCODE_SKILL_DEST = (
-    Path.home() / ".config" / "opencode" / "skills" / "ask-oogway" / "SKILL.md"
-)
+_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+OPENCODE_SKILL_DEST = _CONFIG_HOME / "opencode" / "skills" / "ask-oogway" / "SKILL.md"
 
 
 def _prompt_choice(
