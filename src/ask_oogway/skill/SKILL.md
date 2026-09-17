@@ -13,9 +13,7 @@ The question must be a single quoted string. Read the answer from stdout.
 ask-oogway has no memory between calls, so include whatever context the
 question needs in the message itself.
 
-Only use this for genuinely hard or important questions, not routine ones.
-Each call costs real money. If you'd answer confidently without help, don't
-use it.
+If you'd answer confidently without help, don't use it.
 
 ask-oogway is read-only: it can search and read, but it cannot write files,
 run commands, or change anything. It only ever answers.

@@ -8,6 +8,9 @@ from .config import CONFIG_PATH, detect_provider
 from .providers import REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
+OPENCODE_SKILL_DEST = (
+    Path.home() / ".config" / "opencode" / "skills" / "ask-oogway" / "SKILL.md"
+)
 
 
 def _prompt_choice(
@@ -45,9 +48,10 @@ def run() -> None:
 
     if _confirm("\ninstall the SKILL.md so agents auto-discover ask-oogway?"):
         skill_text = resources.files("ask_oogway.skill").joinpath("SKILL.md").read_text()
-        SKILL_DEST.parent.mkdir(parents=True, exist_ok=True)
-        SKILL_DEST.write_text(skill_text)
-        print(f"installed {SKILL_DEST}")
+        for dest in (SKILL_DEST, OPENCODE_SKILL_DEST):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(skill_text)
+            print(f"installed {dest}")
     else:
         print("skipped")
 
