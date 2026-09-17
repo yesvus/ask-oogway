@@ -9,7 +9,7 @@ from ask_oogway.providers import claude
 class TestPrompts(unittest.TestCase):
     def test_prompt_visible_and_nonempty(self):
         self.assertIn("Oogway", SYSTEM_PROMPT)
-        self.assertIn("Verdict first", SYSTEM_PROMPT)
+        self.assertIn("refuse to comfort", SYSTEM_PROMPT)
 
     def test_claude_appends_prompt_one_shot(self):
         flag = "--append-system-prompt"
