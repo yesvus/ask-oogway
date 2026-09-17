@@ -9,7 +9,12 @@ from .config import CONFIG_PATH, detect_provider
 from .providers import REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
-_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+_XDG_CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME")
+_CONFIG_HOME = (
+    Path(_XDG_CONFIG_HOME)
+    if _XDG_CONFIG_HOME and Path(_XDG_CONFIG_HOME).is_absolute()
+    else Path.home() / ".config"
+)
 OPENCODE_SKILL_DEST = _CONFIG_HOME / "opencode" / "skills" / "ask-oogway" / "SKILL.md"
 
 
