@@ -61,7 +61,7 @@ _ERROR_HINTS = [
     ),
     (
         "rate-limited",
-        "wait and retry",
+        "wait and retry manually",
         [
             ("rate limit",),
             ("rate_limit",),
@@ -191,7 +191,15 @@ def _wrap(exc: Exception, ceiling: int) -> Exception:
     return exc
 
 
-def _post(url: str, key: str, model: str, prompt: str, ceiling: int) -> str:
+def _post(
+    url: str,
+    key: str,
+    model: str,
+    prompt: str,
+    ceiling: int,
+    holder: dict,
+    cancel: threading.Event,
+) -> str:
     payload = {
         "model": model,
         "messages": [
@@ -213,6 +221,9 @@ def _post(url: str, key: str, model: str, prompt: str, ceiling: int) -> str:
     with urllib.request.urlopen(
         request, timeout=None if ceiling == 0 else ceiling
     ) as response:
+        holder["response"] = response
+        if cancel.is_set():
+            raise AskOogwayError(f"openai timed out after {ceiling}s")
         return response.read().decode("utf-8", "replace")
 
 
@@ -228,10 +239,14 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
     # can outlive the ceiling. Run the whole call in a worker and join on
     # the ceiling to enforce a real total deadline.
     result: dict = {}
+    holder: dict = {}
+    cancel = threading.Event()
 
     def _run() -> None:
         try:
-            result["raw"] = _post(url, key, model, prompt, ceiling)
+            result["raw"] = _post(
+                url, key, model, prompt, ceiling, holder, cancel
+            )
         except Exception as exc:  # surfaced by the caller below
             result["error"] = exc
 
@@ -239,6 +254,15 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
     worker.start()
     worker.join(None if ceiling == 0 else ceiling)
     if worker.is_alive():
+        # Signal and unblock the worker so it does not linger holding a
+        # socket; closing the response aborts a read already in flight.
+        cancel.set()
+        response = holder.get("response")
+        if response is not None:
+            try:
+                response.close()
+            except OSError:
+                pass
         raise AskOogwayError(f"openai timed out after {ceiling}s")
     error = result.get("error")
     if error is not None:
