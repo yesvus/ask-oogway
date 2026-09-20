@@ -11,3 +11,7 @@ REGISTRY = {
 
 # Providers that actually answer. The rest are stubs the wizard warns about.
 IMPLEMENTED = {"claude", "openai"}
+
+# CLI-backed providers and their binary, in detection priority order.
+# Endpoint providers (openai) are chosen in config, never detected on PATH.
+DETECT_BINARIES = {"claude": "claude", "chatgpt": "chatgpt"}

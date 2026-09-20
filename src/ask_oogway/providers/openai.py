@@ -1,8 +1,10 @@
 """OpenAI-compatible endpoint provider."""
 
+import http.client
 import json
 import os
 import socket
+import threading
 import urllib.error
 import urllib.request
 
@@ -134,7 +136,7 @@ def _describe_http(exc: urllib.error.HTTPError) -> str:
     except OSError:
         body = ""
     detail = _message_from_body(body) or body.strip()
-    lowered = detail.lower()
+    lowered = f"{exc.code} {detail.lower()}"
     for label, hint, alternatives in _ERROR_HINTS:
         if any(all(m in lowered for m in alt) for alt in alternatives):
             msg = f"openai {label} (HTTP {exc.code}): {hint}"
@@ -156,8 +158,12 @@ def _extract(raw: str) -> str:
     if error:
         detail = error.get("message") if isinstance(error, dict) else error
         raise AskOogwayError(f"openai error: {detail or _tail(raw)}")
-    choices = parsed.get("choices") or []
-    if not choices or not isinstance(choices[0], dict):
+    choices = parsed.get("choices")
+    if (
+        not isinstance(choices, list)
+        or not choices
+        or not isinstance(choices[0], dict)
+    ):
         raise AskOogwayError(f"openai returned no choices: {_tail(raw)}")
     message = choices[0].get("message")
     content = message.get("content") if isinstance(message, dict) else None
@@ -171,37 +177,73 @@ def _extract(raw: str) -> str:
     return answer
 
 
-def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
-    if timeout is not None and timeout < 0:
-        raise AskOogwayError("--timeout must be >= 0 seconds")
-    ceiling = _ABSOLUTE_TIMEOUT if timeout is None else timeout
+def _wrap(exc: Exception, ceiling: int) -> Exception:
+    if isinstance(exc, urllib.error.HTTPError):
+        return AskOogwayError(_describe_http(exc))
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return AskOogwayError(f"openai timed out after {ceiling}s")
+    if isinstance(exc, urllib.error.URLError):
+        return AskOogwayError(f"openai network error: {exc.reason}")
+    if isinstance(exc, ValueError):
+        return AskOogwayError(f"openai invalid endpoint: {exc}")
+    if isinstance(exc, (OSError, http.client.HTTPException)):
+        return AskOogwayError(f"openai network error: {exc}")
+    return exc
+
+
+def _post(url: str, key: str, model: str, prompt: str, ceiling: int) -> str:
     payload = {
-        "model": _model(),
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
     }
     request = urllib.request.Request(
-        f"{_base_url()}/chat/completions",
+        url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {_api_key()}",
+            "Authorization": f"Bearer {key}",
             "User-Agent": "ask-oogway",
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(
-            request, timeout=None if ceiling == 0 else ceiling
-        ) as response:
-            raw = response.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as exc:
-        raise AskOogwayError(_describe_http(exc)) from exc
-    except urllib.error.URLError as exc:
-        raise AskOogwayError(f"openai network error: {exc.reason}") from exc
-    except (TimeoutError, socket.timeout) as exc:
-        raise AskOogwayError(f"openai timed out after {ceiling}s") from exc
-    return _extract(raw)
+    with urllib.request.urlopen(
+        request, timeout=None if ceiling == 0 else ceiling
+    ) as response:
+        return response.read().decode("utf-8", "replace")
+
+
+def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
+    if timeout is not None and timeout < 0:
+        raise AskOogwayError("--timeout must be >= 0 seconds")
+    ceiling = _ABSOLUTE_TIMEOUT if timeout is None else timeout
+    url = f"{_base_url()}/chat/completions"
+    key = _api_key()
+    model = _model()
+
+    # urlopen's timeout is per socket operation, so a trickling endpoint
+    # can outlive the ceiling. Run the whole call in a worker and join on
+    # the ceiling to enforce a real total deadline.
+    result: dict = {}
+
+    def _run() -> None:
+        try:
+            result["raw"] = _post(url, key, model, prompt, ceiling)
+        except Exception as exc:  # surfaced by the caller below
+            result["error"] = exc
+
+    worker = threading.Thread(target=_run, daemon=True)
+    worker.start()
+    worker.join(None if ceiling == 0 else ceiling)
+    if worker.is_alive():
+        raise AskOogwayError(f"openai timed out after {ceiling}s")
+    error = result.get("error")
+    if error is not None:
+        wrapped = _wrap(error, ceiling)
+        if isinstance(wrapped, AskOogwayError):
+            raise wrapped from error
+        raise error
+    return _extract(result["raw"])

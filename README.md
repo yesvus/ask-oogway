@@ -37,10 +37,12 @@ See `ask-oogway --help` for `--quiet` and `--timeout`.
 
 ## Config
 
-`ask-oogway init` writes `~/.config/ask-oogway/config.toml`:
+`ask-oogway init` writes `~/.config/ask-oogway/config.toml` with the
+chosen provider. Values: `claude` (default), `openai`, or `chatgpt`
+(not implemented yet). For example:
 
 ```toml
-provider = "claude"  # default. also: openai, chatgpt (not implemented yet)
+provider = "openai"
 ```
 
 The `openai` provider talks to any OpenAI-compatible `/chat/completions`

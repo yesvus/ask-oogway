@@ -1,11 +1,13 @@
 """Tests for the OpenAI-compatible endpoint provider."""
 
+import http.client
 import json
 import os
 import threading
+import time
 import unittest
 import urllib.error
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 
 from ask_oogway.errors import AskOogwayError
@@ -24,6 +26,8 @@ class _Handler(BaseHTTPRequestHandler):
                 "json": json.loads(body or b"{}"),
             }
         )
+        if self.server.delay:
+            time.sleep(self.server.delay)
         status, payload = self.server.queue.pop(0)
         if isinstance(payload, (bytes, bytearray)):
             data = bytes(payload)
@@ -33,7 +37,10 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except OSError:
+            pass
 
     def log_message(self, *args):
         pass
@@ -41,9 +48,10 @@ class _Handler(BaseHTTPRequestHandler):
 
 class OpenAITestCase(unittest.TestCase):
     def setUp(self):
-        self.server = HTTPServer(("127.0.0.1", 0), _Handler)
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
         self.server.seen = []
         self.server.queue = []
+        self.server.delay = 0
         self.thread = threading.Thread(
             target=self.server.serve_forever, daemon=True
         )
@@ -202,6 +210,56 @@ class OpenAITestCase(unittest.TestCase):
         with self.assertRaises(AskOogwayError) as cm:
             openai.ask("hi")
         self.assertIn("empty output", str(cm.exception))
+
+    def test_choices_not_list(self):
+        self._enqueue(200, {"choices": {}})
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("no choices", str(cm.exception))
+
+    def test_status_code_drives_classification(self):
+        self._enqueue(401, {"unexpected": "shape"})
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("auth failed", str(cm.exception))
+
+    def test_malformed_base_url(self):
+        with mock.patch.dict(
+            os.environ, {"ASK_OOGWAY_BASE_URL": "notaurl"}
+        ):
+            with self.assertRaises(AskOogwayError) as cm:
+                openai.ask("hi")
+        self.assertIn("invalid endpoint", str(cm.exception))
+
+    def test_total_timeout_caps_slow_endpoint(self):
+        self.server.delay = 2
+        self._enqueue(200, {"choices": [{"message": {"content": "late"}}]})
+        start = time.monotonic()
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi", timeout=1)
+        elapsed = time.monotonic() - start
+        self.assertIn("timed out after 1s", str(cm.exception))
+        self.assertLess(elapsed, 1.8)
+
+    def test_remote_disconnected(self):
+        with mock.patch.object(
+            openai.urllib.request,
+            "urlopen",
+            side_effect=http.client.RemoteDisconnected("boom"),
+        ):
+            with self.assertRaises(AskOogwayError) as cm:
+                openai.ask("hi")
+        self.assertIn("network error", str(cm.exception))
+
+    def test_connection_reset(self):
+        with mock.patch.object(
+            openai.urllib.request,
+            "urlopen",
+            side_effect=ConnectionResetError("reset"),
+        ):
+            with self.assertRaises(AskOogwayError) as cm:
+                openai.ask("hi")
+        self.assertIn("network error", str(cm.exception))
 
     def test_empty_output(self):
         self._enqueue(200, {"choices": [{"message": {"content": "  "}}]})
