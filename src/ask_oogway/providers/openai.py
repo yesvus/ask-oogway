@@ -118,6 +118,8 @@ def _message_from_body(body: str) -> str:
         parsed = json.loads(body)
     except json.JSONDecodeError:
         return ""
+    if not isinstance(parsed, dict):
+        return ""
     error = parsed.get("error")
     if isinstance(error, dict):
         return error.get("message") or ""
@@ -148,14 +150,17 @@ def _extract(raw: str) -> str:
         raise AskOogwayError(
             f"openai returned invalid JSON: {_tail(raw)}"
         ) from exc
+    if not isinstance(parsed, dict):
+        raise AskOogwayError(f"openai returned unexpected JSON: {_tail(raw)}")
     error = parsed.get("error")
     if error:
         detail = error.get("message") if isinstance(error, dict) else error
         raise AskOogwayError(f"openai error: {detail or _tail(raw)}")
     choices = parsed.get("choices") or []
-    if not choices:
+    if not choices or not isinstance(choices[0], dict):
         raise AskOogwayError(f"openai returned no choices: {_tail(raw)}")
-    content = (choices[0].get("message") or {}).get("content")
+    message = choices[0].get("message")
+    content = message.get("content") if isinstance(message, dict) else None
     if isinstance(content, list):
         content = "".join(
             part.get("text", "") for part in content if isinstance(part, dict)

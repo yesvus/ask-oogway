@@ -179,6 +179,30 @@ class OpenAITestCase(unittest.TestCase):
             openai.ask("hi")
         self.assertIn("no choices", str(cm.exception))
 
+    def test_non_dict_json_array(self):
+        self._enqueue(200, [])
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("unexpected JSON", str(cm.exception))
+
+    def test_non_dict_json_string(self):
+        self._enqueue(200, "x")
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("unexpected JSON", str(cm.exception))
+
+    def test_choice_not_object(self):
+        self._enqueue(200, {"choices": [None]})
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("no choices", str(cm.exception))
+
+    def test_message_not_object(self):
+        self._enqueue(200, {"choices": [{"message": "x"}]})
+        with self.assertRaises(AskOogwayError) as cm:
+            openai.ask("hi")
+        self.assertIn("empty output", str(cm.exception))
+
     def test_empty_output(self):
         self._enqueue(200, {"choices": [{"message": {"content": "  "}}]})
         with self.assertRaises(AskOogwayError) as cm:
