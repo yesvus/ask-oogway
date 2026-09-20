@@ -5,7 +5,8 @@ Master Oogway.
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/) and the `claude` CLI on PATH.
+Requires [uv](https://docs.astral.sh/uv/). The `claude` provider also
+needs the `claude` CLI on PATH.
 
 ```sh
 git clone https://github.com/yesvus/ask-oogway.git
@@ -39,7 +40,22 @@ See `ask-oogway --help` for `--quiet` and `--timeout`.
 `ask-oogway init` writes `~/.config/ask-oogway/config.toml`:
 
 ```toml
-provider = "claude"  # default. also: chatgpt (not implemented yet)
+provider = "claude"  # default. also: openai, chatgpt (not implemented yet)
+```
+
+The `openai` provider talks to any OpenAI-compatible `/chat/completions`
+endpoint:
+
+| variable | default | meaning |
+| --- | --- | --- |
+| `ASK_OOGWAY_BASE_URL` | `https://api.openai.com/v1` | endpoint root |
+| `ASK_OOGWAY_MODEL` | `claude-opus-4-6-thinking` | model id |
+| `ASK_OOGWAY_API_KEY` | falls back to `OPENAI_API_KEY` | bearer token |
+
+```sh
+export ASK_OOGWAY_BASE_URL="https://your-gateway.example/v1"
+export ASK_OOGWAY_MODEL="claude-opus-4-6-thinking"
+export ASK_OOGWAY_API_KEY="..."
 ```
 
 It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`
