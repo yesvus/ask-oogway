@@ -80,6 +80,12 @@ class TestGetProvider(unittest.TestCase):
                 self.assertEqual(config.detect_provider(), "claude")
                 self.assertEqual(config.detect_provider(), DEFAULT_PROVIDER)
 
+    def test_detection_ignores_http_provider_binary(self):
+        with tempfile.TemporaryDirectory() as bintd:
+            self._write_bin(bintd, "openai")
+            with mock.patch.dict(os.environ, {"PATH": bintd}):
+                self.assertEqual(config.detect_provider(), "claude")
+
 
 if __name__ == "__main__":
     unittest.main()

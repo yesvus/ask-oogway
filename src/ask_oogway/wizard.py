@@ -6,7 +6,7 @@ from importlib import resources
 from pathlib import Path
 
 from .config import CONFIG_PATH, detect_provider
-from .providers import REGISTRY
+from .providers import IMPLEMENTED, REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
 _XDG_CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME")
@@ -61,5 +61,5 @@ def run() -> None:
         print("skipped")
 
     print("\ndone")
-    if provider not in ("claude",):
+    if provider not in IMPLEMENTED:
         print(f"note: the {provider} provider isn't implemented yet", file=sys.stderr)

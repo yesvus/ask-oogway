@@ -5,18 +5,18 @@ import tomllib
 from pathlib import Path
 
 from .errors import AskOogwayError
-from .providers import REGISTRY
+from .providers import DETECT_BINARIES
 
 DEFAULT_PROVIDER = "claude"
 CONFIG_PATH = Path.home() / ".config" / "ask-oogway" / "config.toml"
 
 
 def detect_provider() -> str:
-    # Walks REGISTRY in order, so its literal order is detection priority.
-    # Binary name defaults to the provider name. Called at init time only:
-    # the result is written to config.toml, runtime honors the file.
-    for name in REGISTRY:
-        if shutil.which(name):
+    # Walks the CLI-backed providers in order, so its literal order is
+    # detection priority. Called at init time only: the result is written
+    # to config.toml, runtime honors the file.
+    for name, binary in DETECT_BINARIES.items():
+        if shutil.which(binary):
             return name
     return DEFAULT_PROVIDER
 
