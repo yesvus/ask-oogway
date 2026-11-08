@@ -38,7 +38,7 @@ See `ask-oogway --help` for `--quiet` and `--timeout`.
 ## Config
 
 `ask-oogway init` writes `~/.config/ask-oogway/config.toml` with the
-chosen provider. Values: `claude` (default), `openai`, or `chatgpt`
+chosen provider. Values: `claude` (default), `openai`, `acp`, or `chatgpt`
 (not implemented yet). For example:
 
 ```toml
@@ -64,6 +64,6 @@ It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`
 and `~/.config/opencode/skills/ask-oogway/`, so agents auto-discover
 ask-oogway without being told about it.
 
-## Stack
+## ACP agent transport (opt-in)\n\nACP standardizes the **client-to-agent** protocol. It does not replace direct model inference APIs such as OpenAI-compatible `/chat/completions`. To talk to an ACP-capable agent:\n\n```sh\nuv tool install --editable . --with agent-client-protocol\n# Install and authenticate an ACP agent separately (for example, OpenCode).\nexport ASK_OOGWAY_ACP_COMMAND='opencode acp'\nprintf 'provider = "acp"\\n' > ~/.config/ask-oogway/config.toml\nask-oogway -m 'Critique this architecture without changing anything.'\n```\n\nThe command is split into arguments without invoking a shell. This provider runs the maintained Python ACP SDK, creates a fresh session, uses an advertised `read-only`, `plan`, or `architect` mode, refuses agents without one, denies all permission requests, and does not offer client-side write/terminal operations or MCP servers. It preserves the existing CLI, history, and timeout behavior. The SDK is installed separately to keep the base CLI dependency-free.\n\n**Security limitation:** ACP is a transport and permission interface, **not a sandbox**. An agent can have its own built-in tools or a misleading `plan` mode and may bypass client permission requests. Use an OS/container read-only sandbox and trusted agent configuration if filesystem safety is required. ACP also does not grant ChatGPT/Codex subscription access; authenticate the selected agent according to its own rules.\n\nThe existing `claude` adapter and `openai` API provider remain supported for backwards compatibility. `ask-oogway` is an ACP **client** here; this is separate from issue #21, which proposes an MCP **server**.\n\n## Stack
 
 Python 3.12+, uv, stdlib only. See `pyproject.toml`.

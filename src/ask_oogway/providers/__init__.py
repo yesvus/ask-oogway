@@ -1,16 +1,17 @@
-from . import chatgpt, claude, openai
+from . import acp, chatgpt, claude, openai
 
 # Provider contract: ask(prompt, *, timeout=None, quiet=False) -> str.
 # timeout caps the call in seconds (0 disables the ceiling); quiet
 # suppresses stderr status, never errors. Literal order is detection priority.
 REGISTRY = {
     "claude": claude.ask,
+    "acp": acp.ask,
     "chatgpt": chatgpt.ask,
     "openai": openai.ask,
 }
 
 # Providers that actually answer. The rest are stubs the wizard warns about.
-IMPLEMENTED = {"claude", "openai"}
+IMPLEMENTED = {"claude", "openai", "acp"}
 
 # CLI-backed providers and their binary, in detection priority order.
 # Endpoint providers (openai) are chosen in config, never detected on PATH.
