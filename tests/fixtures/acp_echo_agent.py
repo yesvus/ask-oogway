@@ -56,7 +56,15 @@ class EchoAgent(Agent):
             raise ValueError("config mode not advertised")
         trace("set_config_option " + value)
         self.mode = value
-        return SetSessionConfigOptionResponse()
+        return SetSessionConfigOptionResponse(config_options=[
+            SessionConfigOptionSelect(
+                id="mode", name="Mode", category="mode", type="select", current_value="plan",
+                options=[
+                    SessionConfigSelectOption(value="code", name="Code"),
+                    SessionConfigSelectOption(value="plan", name="Plan"),
+                ],
+            ),
+        ])
 
     async def prompt(self, session_id, prompt, **kwargs):
         trace("prompt_start mode=" + str(self.mode))
