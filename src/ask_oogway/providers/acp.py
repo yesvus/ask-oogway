@@ -82,7 +82,7 @@ async def _exchange(prompt: str, argv: list[str]) -> str:
             raise RequestError.invalid_params({"reason": "client file access disabled"})
 
     client = ReadOnlyClient()
-    async with spawn_agent_process(client, *argv) as (connection, _process):
+    async with spawn_agent_process(client, *argv, env=os.environ.copy()) as (connection, _process):
         await connection.initialize(protocol_version=PROTOCOL_VERSION)
         session = await connection.new_session(cwd=os.getcwd(), mcp_servers=[])
         mode = _safe_mode(session)
