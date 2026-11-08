@@ -124,6 +124,17 @@ class TestClaudeAsk(unittest.TestCase):
         self.assertEqual(answer, "Final answer")
         self.assertEqual(progress, ["Hel", "lo"])
 
+    def test_failed_progress_callback_does_not_abort_answer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            def fail_write(_text):
+                raise OSError("history volume is read-only")
+            with mock.patch.dict(os.environ, self._env(tmp, "stream")):
+                self.assertEqual(
+                    claude.ask("long question", on_chunk=fail_write),
+                    "Final answer",
+                )
+
     def test_stream_ignores_subagent_messages(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._write_fake(tmp)

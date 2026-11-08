@@ -154,7 +154,11 @@ class _StreamOutput:
             self.has_delta = True
         self.chunks.append(text)
         if self.on_chunk:
-            self.on_chunk(text)
+            try:
+                self.on_chunk(text)
+            except Exception:
+                # Persistence is best-effort, never sacrifice the model answer.
+                pass
 
     def _line(self, line):
         if not line.strip():
