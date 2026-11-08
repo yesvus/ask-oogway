@@ -175,7 +175,11 @@ class TestJobs(unittest.TestCase):
                     self.assertTrue(live_found, "partial output not persisted live")
                     deadline = time.monotonic() + 6
                     while time.monotonic() < deadline:
-                        meta = json.loads((d / "meta.json").read_text())
+                        try:
+                            meta = json.loads((d / "meta.json").read_text())
+                        except json.JSONDecodeError:
+                            time.sleep(0.05)
+                            continue
                         if meta["status"] == "error":
                             break
                         time.sleep(0.05)
@@ -236,7 +240,12 @@ class TestJobs(unittest.TestCase):
                                 time.sleep(0.1)
                 self.assertTrue(found.strip(), "output.txt never appeared")
                 self.assertIn("line1", found)
-                meta = json.loads((Path(info["dir"]) / "meta.json").read_text())
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    meta = json.loads((Path(info["dir"]) / "meta.json").read_text())
+                    if meta["status"] == "ok":
+                        break
+                    time.sleep(0.05)
                 self.assertEqual(meta["status"], "ok")
 
     def test_sigkilled_shows_stale(self):

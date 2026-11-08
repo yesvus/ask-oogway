@@ -158,6 +158,9 @@ class _StreamOutput:
 
     def _line(self, line):
         if not line.strip():
+            # Text-mode fallback must preserve empty lines in echoed prompts.
+            if self.raw:
+                self._text(line.decode("utf-8", "replace"))
             return
         try:
             event = json.loads(line)
