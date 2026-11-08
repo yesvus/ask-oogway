@@ -51,7 +51,7 @@ class EchoAgent(Agent):
             raise ValueError("read-only mode was not selected")
         trace("before_update")
         try:
-            chunk = AgentMessageChunk(content=TextContentBlock(type="text", text="ACP smoke OK"))
+            chunk = AgentMessageChunk(session_update="agent_message_chunk", content=TextContentBlock(type="text", text="ACP smoke OK"))
             trace("chunk_created")
             await self.conn.session_update(session_id=session_id, update=chunk)
             trace("after_update")
