@@ -24,6 +24,16 @@ class FakeText:
         self.text = text
 
 
+class FakeThoughtChunk:
+    def __init__(self, content):
+        self.content = content
+
+
+class FakeImage:
+    def __init__(self, payload):
+        self.payload = payload
+
+
 class FakeAgentChunk:
     def __init__(self, content):
         self.content = content
@@ -59,6 +69,11 @@ class FakeConnection:
 
     async def prompt(self, *, session_id, prompt):
         self.seen_prompt = prompt[0].text
+        # Only agent message text is returned. Ignore thoughts, tool updates
+        # and non-text content even when emitted during the same prompt.
+        await self.client.session_update("s1", FakeThoughtChunk(FakeText("internal thought")))
+        await self.client.session_update("s1", SimpleNamespace(kind="tool_call", title="read"))
+        await self.client.session_update("s1", FakeAgentChunk(FakeImage("image bytes")))
         for chunk in self.chunks:
             await self.client.session_update("s1", FakeAgentChunk(FakeText(chunk)))
         return SimpleNamespace(stop_reason=self.stop_reason)

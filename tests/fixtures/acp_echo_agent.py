@@ -51,6 +51,8 @@ class EchoAgent(Agent):
 
     async def prompt(self, session_id, prompt, **kwargs):
         trace("prompt_start mode=" + str(self.mode))
+        if os.environ.get("ACP_SMOKE_HANG"):
+            await asyncio.sleep(60)
         if self.mode not in ("read-only", "plan"):
             raise ValueError("read-only mode was not selected")
         trace("before_update")

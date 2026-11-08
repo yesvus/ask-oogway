@@ -70,7 +70,7 @@ ACP is a **client-to-agent** protocol, not an alternative to a direct model API 
 OpenAI-compatible `/chat/completions`. Install the official Python ACP SDK:
 
 ```sh
-uv tool install --editable . --with agent-client-protocol
+uv tool install --editable . --with agent-client-protocol==0.12.1
 # Install and authenticate OpenCode independently, then:
 export ASK_OOGWAY_ACP_COMMAND='opencode acp'
 mkdir -p ~/.config/ask-oogway
