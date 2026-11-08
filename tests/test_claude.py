@@ -15,6 +15,26 @@ from ask_oogway.providers import claude
 _FAKE_SCRIPT = """\
 #!/bin/sh
 case "$FAKE_MODE" in
+  stream)
+    printf '%s\n' '{"type":"system","subtype":"init"}'
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"thinking_delta","thinking":"private"}}}'
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"Hel"}}}'
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"lo"}}}'
+    printf '%s\n' '{"type":"result","result":"Final answer","is_error":false}'
+    ;;
+  streamed-error)
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"some work"}}}'
+    printf '%s\n' '{"type":"result","result":"","is_error":true}'
+    ;;
+  partial-stall)
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"unfinished answer"}}}'
+    sleep 10
+    ;;
+  subagent)
+    printf '%s\n' '{"type":"stream_event","parent_tool_use_id":"child-id","event":{"delta":{"type":"text_delta","text":"secret child"}}}'
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"parent text"}}}'
+    printf '%s\n' '{"type":"result","result":"parent text","is_error":false}'
+    ;;
   trickle)
     for i in 1 2 3 4 5 6; do
       echo "line$i"
@@ -94,6 +114,53 @@ class TestClaudeAsk(unittest.TestCase):
             "PATH": tmpdir + os.pathsep + os.environ["PATH"],
             "FAKE_MODE": mode,
         }
+
+    def test_json_stream_returns_final_result_and_progress(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            progress = []
+            with mock.patch.dict(os.environ, self._env(tmp, "stream")):
+                answer = claude.ask("long question", on_chunk=progress.append)
+        self.assertEqual(answer, "Final answer")
+        self.assertEqual(progress, ["Hel", "lo"])
+
+    def test_failed_progress_callback_does_not_abort_answer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            def fail_write(_text):
+                raise OSError("history volume is read-only")
+            with mock.patch.dict(os.environ, self._env(tmp, "stream")):
+                self.assertEqual(
+                    claude.ask("long question", on_chunk=fail_write),
+                    "Final answer",
+                )
+
+    def test_stream_ignores_subagent_messages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            progress = []
+            with mock.patch.dict(os.environ, self._env(tmp, "subagent")):
+                answer = claude.ask("hi", on_chunk=progress.append)
+        self.assertEqual(answer, "parent text")
+        self.assertEqual(progress, ["parent text"])
+
+    def test_streamed_error_keeps_partial_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            with mock.patch.dict(os.environ, self._env(tmp, "streamed-error")):
+                with self.assertRaisesRegex(AskOogwayError, "unsuccessful result") as cm:
+                    claude.ask("hi")
+        self.assertEqual(cm.exception.partial_answer, "some work")
+
+    def test_partial_answer_survives_timeout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_fake(tmp)
+            progress = []
+            with mock.patch.dict(os.environ, self._env(tmp, "partial-stall")):
+                with self.assertRaisesRegex(AskOogwayError, "timed out") as cm:
+                    claude.ask("hi", timeout=1, on_chunk=progress.append)
+        self.assertEqual(cm.exception.partial_answer, "unfinished answer")
+        self.assertEqual(progress, ["unfinished answer"])
 
     def test_success_passthrough_strips_stdout(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -68,6 +68,17 @@ It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`
 and `~/.config/opencode/skills/ask-oogway/`, so agents auto-discover
 ask-oogway without being told about it.
 
+## Claude provider reliability
+
+The Claude CLI provider uses `--output-format stream-json --verbose
+--include-partial-messages` to capture answer text as it arrives, while
+preserving clean text-only CLI output. For completed calls, Claude's final
+`result` is authoritative; thinking, tools and metadata are excluded.
+During a call, partial answer text is persisted to the history `output.txt`
+file. If a call stalls, times out or its process exits unexpectedly, captured
+text is retained alongside error metadata. This does not guarantee a response
+when the upstream model emits no text.
+
 ## ACP agent transport (opt-in)
 
 ACP is a **client-to-agent** protocol, not an alternative to a direct model API such as

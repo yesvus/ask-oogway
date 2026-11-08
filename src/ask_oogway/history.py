@@ -11,6 +11,18 @@ from pathlib import Path
 HISTORY_DIR = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share")) / "ask-oogway" / "history"
 
 
+def _write_meta_atomic(path: Path, meta: dict) -> None:
+    """Readers must never observe partially written job metadata."""
+    tmp = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            json.dump(meta, out, indent=2)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def record(prompt: str, *, provider: str, duration: float, answer: str = "", error: str | None = None) -> str | None:
     now = datetime.now().astimezone()
     record_id = now.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
@@ -156,7 +168,20 @@ def set_pid(record_id: str, pid: int) -> bool:
         return False
     meta["pid"] = pid
     try:
-        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        _write_meta_atomic(meta_path, meta)
+    except OSError:
+        return False
+    return True
+
+
+def append_output(record_id: str, text: str) -> bool:
+    """Best-effort live answer persistence, including through abrupt termination."""
+    if not text:
+        return True
+    try:
+        path = HISTORY_DIR / record_id / "output.txt"
+        with path.open("a", encoding="utf-8") as file:
+            file.write(text)
     except OSError:
         return False
     return True
@@ -183,10 +208,10 @@ def finish(
     meta["error"] = error
     meta["pid"] = pid
     try:
-        (record_dir / "output.txt").write_text(
-            answer if error is None else "", encoding="utf-8"
-        )
-        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        output_path = record_dir / "output.txt"
+        if error is None or answer or not output_path.exists():
+            output_path.write_text(answer, encoding="utf-8")
+        _write_meta_atomic(meta_path, meta)
     except OSError:
         return False
     try:

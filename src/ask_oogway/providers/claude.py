@@ -1,5 +1,6 @@
 """claude CLI provider."""
 
+import json
 import os
 import selectors
 import subprocess
@@ -25,6 +26,10 @@ _ARGS = [
     "--strict-mcp-config",
     f"--tools={_READONLY_TOOLS}",
     f"--allowedTools={_READONLY_TOOLS}",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
     "--append-system-prompt",
     SYSTEM_PROMPT,
 ]
@@ -125,7 +130,94 @@ def _describe_exit(code, stderr):
     return f"claude exited with {code}: {stderr.strip()}"
 
 
-def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
+class _StreamOutput:
+    """Decode Claude stream-json events while retaining text-mode compatibility.
+
+    The final result is authoritative on success; partial text deltas survive
+    timeouts and abrupt process exits. Thinking and tool events are excluded.
+    """
+
+    def __init__(self, on_chunk=None):
+        self.buffer = b""
+        self.raw = []
+        self.chunks = []
+        self.final = None
+        self.fallback = None
+        self.is_error = False
+        self.has_delta = False
+        self.on_chunk = on_chunk
+
+    def _text(self, text, *, delta=False):
+        if not isinstance(text, str) or not text:
+            return
+        if delta:
+            self.has_delta = True
+        self.chunks.append(text)
+        if self.on_chunk:
+            try:
+                self.on_chunk(text)
+            except Exception:
+                # Persistence is best-effort, never sacrifice the model answer.
+                pass
+
+    def _line(self, line):
+        if not line.strip():
+            # Text-mode fallback must preserve empty lines in echoed prompts.
+            if self.raw:
+                self._text(line.decode("utf-8", "replace"))
+            return
+        try:
+            event = json.loads(line)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            text = line.decode("utf-8", "replace")
+            self.raw.append(text)
+            self._text(text)
+            return
+        if not isinstance(event, dict):
+            return
+        if event.get("parent_tool_use_id") is not None:
+            return
+        kind = event.get("type")
+        if kind == "stream_event":
+            inner = event.get("event") or {}
+            delta = inner.get("delta") or {}
+            if delta.get("type") == "text_delta":
+                self._text(delta.get("text"), delta=True)
+        elif kind == "assistant" and not self.has_delta:
+            blocks = (event.get("message") or {}).get("content") or []
+            text = "".join(
+                block.get("text", "") for block in blocks
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+            if text:
+                self.fallback = text
+                self._text(text)
+        elif kind == "result":
+            self.is_error = bool(event.get("is_error"))
+            if isinstance(event.get("result"), str):
+                self.final = event["result"]
+
+    def feed(self, data):
+        self.buffer += data
+        while b"\n" in self.buffer:
+            line, self.buffer = self.buffer.split(b"\n", 1)
+            self._line(line + b"\n")
+
+    def close(self):
+        if self.buffer:
+            self._line(self.buffer)
+            self.buffer = b""
+
+    @property
+    def partial(self):
+        return "".join(self.chunks).strip()
+
+    @property
+    def answer(self):
+        return (self.final if self.final is not None else self.partial).strip()
+
+
+def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False, on_chunk=None) -> str:
     if timeout is not None and timeout < 0:
         raise AskOogwayError("--timeout must be >= 0 seconds")
     ceiling = _ABSOLUTE_TIMEOUT if timeout is None else timeout
@@ -148,7 +240,7 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
     sel = selectors.DefaultSelector()
     for name, pipe in streams.items():
         sel.register(pipe, selectors.EVENT_READ, name)
-    out_parts: list[bytes] = []
+    output = _StreamOutput(on_chunk)
     err_parts: list[bytes] = []
     finished = set()
     start = time.monotonic()
@@ -202,34 +294,44 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
                 if data:
                     last_activity = time.monotonic()
                     bytes_received += len(data)
-                    (out_parts if key.data == "stdout" else err_parts).append(data)
+                    if key.data == "stdout":
+                        output.feed(data)
+                    else:
+                        err_parts.append(data)
                 elif key.data not in finished:
                     sel.unregister(key.fileobj)
                     finished.add(key.data)
 
-        stdout = b"".join(out_parts).decode("utf-8", "replace")
+        output.close()
         stderr = b"".join(err_parts).decode("utf-8", "replace")
+
+        def failure(message):
+            exc = AskOogwayError(message)
+            exc.partial_answer = output.partial
+            return exc
         if proc.poll() is None:
             stalled = (time.monotonic() - last_activity) >= _STALL_TIMEOUT
             total = int(time.monotonic() - start)
             proc.kill()
-            partial = _tail(stdout + "\n" + stderr)
+            partial = _tail(output.partial + "\n" + stderr)
             if stalled:
-                raise AskOogwayError(
+                raise failure(
                     f"claude stalled with no output for {_STALL_TIMEOUT}s "
                     f"({total}s total) and was killed"
                     + (f". Partial output:\n{partial}" if partial else "")
                 )
-            raise AskOogwayError(
+            raise failure(
                 f"claude timed out after {total}s (limit {ceiling}s) "
                 "and was killed" + (f". Partial output:\n{partial}" if partial else "")
             )
         if proc.returncode != 0:
-            raise AskOogwayError(_describe_exit(proc.returncode, stderr))
-        answer = stdout.strip()
+            raise failure(_describe_exit(proc.returncode, stderr))
+        if output.is_error:
+            raise failure("claude reported an unsuccessful result: " + _tail(output.partial))
+        answer = output.answer
         if not answer:
             detail = stderr.strip()
-            raise AskOogwayError(
+            raise failure(
                 "claude returned empty output"
                 + (f": {detail}" if detail else "")
             )

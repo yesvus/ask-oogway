@@ -21,6 +21,40 @@ def _record_dir(tmp, rid):
 
 
 class TestHistory(unittest.TestCase):
+    def test_append_output_survives_failed_finish(self):
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch.object(history, "HISTORY_DIR", Path(td)):
+                rec = history.begin("long prompt", "claude")
+                self.assertTrue(history.append_output(rec["id"], "partial "))
+                self.assertTrue(history.append_output(rec["id"], "answer"))
+                self.assertTrue(history.finish(rec["id"], duration=2, error="timeout"))
+                output = Path(rec["dir"]) / "output.txt"
+                self.assertEqual(output.read_text(), "partial answer")
+                meta = json.loads((Path(rec["dir"]) / "meta.json").read_text())
+                self.assertEqual(meta["status"], "error")
+
+    def test_runner_saves_live_partial_claude_output(self):
+        def fake(prompt, *, timeout=None, quiet=False, on_chunk=None):
+            on_chunk("first")
+            on_chunk(" second")
+            exc = AskOogwayError("model unavailable")
+            exc.partial_answer = "first second"
+            raise exc
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                mock.patch.object(history, "HISTORY_DIR", Path(td)),
+                mock.patch("ask_oogway.runner.get_provider", return_value="claude"),
+                mock.patch.object(runner, "REGISTRY", {"claude": fake}),
+            ):
+                with self.assertRaisesRegex(AskOogwayError, "model unavailable"):
+                    runner.ask("long prompt")
+                recs = list(Path(td).iterdir())
+                self.assertEqual(len(recs), 1)
+                self.assertEqual((recs[0] / "output.txt").read_text(), "first second")
+                meta = json.loads((recs[0] / "meta.json").read_text())
+                self.assertEqual(meta["status"], "error")
+
     def test_record_success(self):
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
