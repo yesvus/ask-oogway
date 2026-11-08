@@ -162,6 +162,19 @@ def set_pid(record_id: str, pid: int) -> bool:
     return True
 
 
+def append_output(record_id: str, text: str) -> bool:
+    """Best-effort live answer persistence, including through abrupt termination."""
+    if not text:
+        return True
+    try:
+        path = HISTORY_DIR / record_id / "output.txt"
+        with path.open("a", encoding="utf-8") as file:
+            file.write(text)
+    except OSError:
+        return False
+    return True
+
+
 def finish(
     record_id: str,
     *,
@@ -183,9 +196,9 @@ def finish(
     meta["error"] = error
     meta["pid"] = pid
     try:
-        (record_dir / "output.txt").write_text(
-            answer if error is None else "", encoding="utf-8"
-        )
+        output_path = record_dir / "output.txt"
+        if error is None or answer or not output_path.exists():
+            output_path.write_text(answer, encoding="utf-8")
         meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     except OSError:
         return False

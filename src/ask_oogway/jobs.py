@@ -152,13 +152,17 @@ def run_detached(
         os._exit(1)
     t0 = time.monotonic()
     try:
-        answer = handler(prompt, timeout=timeout, quiet=quiet)
+        options = {"timeout": timeout, "quiet": quiet}
+        if child_provider == "claude":
+            options["on_chunk"] = lambda text: history.append_output(record_id, text)
+        answer = handler(prompt, **options)
     except AskOogwayError as exc:
         try:
             history.finish(
                 record_id,
                 duration=time.monotonic() - t0,
                 error=str(exc),
+                answer=getattr(exc, "partial_answer", ""),
                 pid=os.getpid(),
             )
         except Exception:
