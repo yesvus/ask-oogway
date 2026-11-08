@@ -31,28 +31,33 @@ def _command() -> list[str]:
     return argv
 
 
-def _safe_mode(session) -> str:
-    """Read either ACP's legacy session modes or its config-options catalog."""
-    ids = set()
-    modes = getattr(session, "modes", None)
-    for item in getattr(modes, "available_modes", ()) or ():
-        ids.add(item.id)
+def _safe_mode(session) -> tuple[str, str, str | None]:
+    """Choose an advertised mode and its corresponding ACP selection API."""
+    legacy = {
+        item.id
+        for item in (getattr(getattr(session, "modes", None), "available_modes", ()) or ())
+    }
+    config_ids: dict[str, str] = {}
     for option in getattr(session, "config_options", ()) or ():
-        if getattr(option, "id", None) != "mode":
+        option_id = getattr(option, "id", None)
+        if option_id != "mode" and getattr(option, "category", None) != "mode":
             continue
         for item in getattr(option, "options", ()) or ():
-            if isinstance(getattr(item, "value", None), str):
-                ids.add(item.value)
-            else:  # ACP select-option groups
-                for nested in getattr(item, "options", ()) or ():
-                    if isinstance(getattr(nested, "value", None), str):
-                        ids.add(nested.value)
+            value = getattr(item, "value", None)
+            if isinstance(value, str):
+                config_ids[value] = option_id
+            else:  # grouped select options
+                for child in getattr(item, "options", ()) or ():
+                    if isinstance(getattr(child, "value", None), str):
+                        config_ids[child.value] = option_id
     for candidate in _SAFE_MODES:
-        if candidate in ids:
-            return candidate
+        if candidate in legacy:
+            return candidate, "legacy", None
+        if candidate in config_ids:
+            return candidate, "config", config_ids[candidate]
     raise AskOogwayError(
         "ACP agent does not advertise a supported advisory mode "
-        "(read-only/plan/architect), including via configOptions; refusing to run"
+        "(read-only/read_only/plan/architect) in modes or configOptions; refusing to run"
     )
 
 
@@ -86,7 +91,7 @@ def _agent_env(argv: list[str]) -> dict[str, str]:
         "*": "deny",
         "read": {"*": "allow", "*.env": "deny", "*.env.*": "deny"},
         "glob": "allow", "grep": "allow", "list": "allow",
-        "webfetch": "allow", "websearch": "allow",
+        "webfetch": "deny", "websearch": "deny",
         "edit": "deny", "bash": "deny", "task": "deny",
         "external_directory": "deny",
     }
@@ -94,7 +99,7 @@ def _agent_env(argv: list[str]) -> dict[str, str]:
         {"action": "*", "resource": "*", "effect": "deny"},
         *(
             {"action": name, "resource": "*", "effect": "allow"}
-            for name in ("read", "glob", "grep", "webfetch", "websearch")
+            for name in ("read", "glob", "grep")
         ),
         {"action": "read", "resource": "*.env", "effect": "deny"},
         {"action": "read", "resource": "*.env.*", "effect": "deny"},
@@ -134,7 +139,7 @@ async def _exchange(prompt: str, argv: list[str]) -> str:
         if exc.name == "acp":
             raise AskOogwayError(
                 "ACP Python SDK missing: install with "
-                "'uv tool install --editable . --with agent-client-protocol'"
+                "'uv tool install --editable . --with agent-client-protocol==0.12.1'"
             ) from exc
         raise
 
@@ -168,8 +173,15 @@ async def _exchange(prompt: str, argv: list[str]) -> str:
     async with spawn_agent_process(client, *argv, env=_agent_env(argv)) as (connection, _process):
         await connection.initialize(protocol_version=PROTOCOL_VERSION)
         session = await connection.new_session(cwd=os.getcwd(), mcp_servers=[])
-        mode = _safe_mode(session)
-        await connection.set_session_mode(session_id=session.session_id, mode_id=mode)
+        mode, source, config_id = _safe_mode(session)
+        if source == "config":
+            await connection.set_config_option(
+                config_id=config_id, session_id=session.session_id, value=mode
+            )
+        else:
+            await connection.set_session_mode(
+                session_id=session.session_id, mode_id=mode
+            )
         result = await connection.prompt(
             session_id=session.session_id,
             prompt=[TextContentBlock(type="text", text=f"{SYSTEM_PROMPT}\n\n{prompt}")],
@@ -199,3 +211,7 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False) -> str:
         raise AskOogwayError(f"ACP agent executable not found: {argv[0]}") from exc
     except OSError as exc:
         raise AskOogwayError(f"ACP agent process error: {exc}") from exc
+    except AskOogwayError:
+        raise
+    except Exception as exc:
+        raise AskOogwayError(f"ACP agent request failed: {exc}") from exc

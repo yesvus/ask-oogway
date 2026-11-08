@@ -47,6 +47,7 @@ class FakeConnection:
         self.config_modes = config_modes
         self.stop_reason = stop_reason
         self.chosen = None
+        self.selection_api = None
         self.seen_prompt = None
         self.cwd = None
         self.mcp_servers = None
@@ -65,7 +66,16 @@ class FakeConnection:
         )
 
     async def set_session_mode(self, *, session_id, mode_id):
+        if self.modes is None or mode_id not in self.modes:
+            raise RuntimeError("unadvertised legacy mode")
         self.chosen = mode_id
+        self.selection_api = "legacy"
+
+    async def set_config_option(self, *, config_id, session_id, value):
+        if config_id != "mode" or value not in self.config_modes:
+            raise RuntimeError("unadvertised config mode")
+        self.chosen = value
+        self.selection_api = "config"
 
     async def prompt(self, *, session_id, prompt):
         self.seen_prompt = prompt[0].text
@@ -115,6 +125,7 @@ class TestACP(unittest.TestCase):
             self.assertEqual(acp.ask("My question"), "AB")
         conn = state["conn"]
         self.assertEqual(conn.chosen, "plan")
+        self.assertEqual(conn.selection_api, "legacy")
         self.assertEqual(conn.mcp_servers, [])
         self.assertEqual(state["argv"], ("opencode", "acp"))
         self.assertIn("My question", conn.seen_prompt)
@@ -151,6 +162,7 @@ class TestACP(unittest.TestCase):
         with mocked, patch.dict(os.environ, {_env(): "opencode acp"}):
             self.assertEqual(acp.ask("design review"), "Answer")
         self.assertEqual(state["conn"].chosen, "plan")
+        self.assertEqual(state["conn"].selection_api, "config")
 
     def test_unknown_agent_requires_explicit_trust(self):
         with patch.dict(os.environ, {_env(): "generic-agent --acp"}, clear=True):
@@ -169,6 +181,22 @@ class TestACP(unittest.TestCase):
         self.assertEqual(config["permissions"][-1]["effect"], "deny")
         self.assertEqual(config["agents"]["plan"]["permissions"][0]["effect"], "deny")
         self.assertEqual(config["agents"]["plan"]["permissions"][1]["action"], "read")
+
+    def test_web_tools_denied_by_default(self):
+        import json
+        with patch.dict(os.environ, {"OPENCODE_CONFIG_CONTENT": "{}"}):
+            config = json.loads(acp._agent_env(["opencode", "acp"])["OPENCODE_CONFIG_CONTENT"])
+        self.assertEqual(config["permission"]["webfetch"], "deny")
+        self.assertEqual(config["permission"]["websearch"], "deny")
+        self.assertNotIn("webfetch", [r["action"] for r in config["permissions"] if r["effect"] == "allow"])
+        self.assertNotIn("websearch", [r["action"] for r in config["permissions"] if r["effect"] == "allow"])
+
+    def test_protocol_failures_are_normalized(self):
+        async def broken(prompt, argv):
+            raise RuntimeError("server disconnected")
+        with patch.dict(os.environ, {_env(): "opencode acp"}), patch.object(acp, "_exchange", side_effect=broken):
+            with self.assertRaisesRegex(AskOogwayError, "server disconnected"):
+                acp.ask("hi")
 
     def test_invalid_opencode_inline_config(self):
         with patch.dict(os.environ, {"OPENCODE_CONFIG_CONTENT": "invalid"}):

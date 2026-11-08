@@ -78,7 +78,7 @@ printf 'provider = "acp"\n' > ~/.config/ask-oogway/config.toml
 ask-oogway -m 'Review this architecture, without changing files.'
 ```
 
-The provider uses a fresh ACP session, selects an advertised `read-only` or `plan`
+The provider uses a fresh ACP session, selects an advertised `read-only`, `read_only`, `plan`, or `architect`
 mode (including modern `configOptions` mode catalogs), denies all ACP permission
 requests and client filesystem/terminal requests, and collects streamed answer text.
 Existing `claude` and `openai` providers, CLI output, history and background jobs
@@ -87,7 +87,8 @@ are unchanged. `ask-oogway` never auto-detects ACP to avoid unintended migration
 **OpenCode hardening:** When the ACP command is `opencode acp`, ask-oogway supplies
 a restrictive inline tool policy supporting both OpenCode V1 and V2. It disables
 edits, shell commands, subagents, external-directory operations and unapproved
-extensions while permitting ordinary read/search tools. Existing inline model
+extensions and external web fetch/search tools while permitting local file read/search.
+Existing inline model
 settings are preserved. `plan` alone is *not* read-only, so the extra policy matters.
 
 **Security limit:** ACP itself is **not an OS sandbox**. An agent's native code,

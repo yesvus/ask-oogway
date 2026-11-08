@@ -13,7 +13,7 @@ def trace(text):
 
 
 from acp import Agent, InitializeResponse, NewSessionResponse, PromptResponse, run_agent
-from acp.schema import AgentMessageChunk, SessionMode, SessionModeState, SessionConfigOptionSelect, SessionConfigSelectOption, SetSessionModeResponse, TextContentBlock
+from acp.schema import AgentMessageChunk, SessionMode, SessionModeState, SessionConfigOptionSelect, SessionConfigSelectOption, SetSessionModeResponse, SetSessionConfigOptionResponse, TextContentBlock
 
 
 class EchoAgent(Agent):
@@ -45,16 +45,26 @@ class EchoAgent(Agent):
         )
 
     async def set_session_mode(self, session_id, mode_id, **kwargs):
+        if os.environ.get("ACP_SMOKE_CONFIG_ONLY") or mode_id != "read-only":
+            raise ValueError("legacy mode not advertised")
         trace("set_mode " + mode_id)
         self.mode = mode_id
         return SetSessionModeResponse()
+
+    async def set_config_option(self, config_id, session_id, value, **kwargs):
+        if not os.environ.get("ACP_SMOKE_CONFIG_ONLY") or config_id != "mode" or value != "plan":
+            raise ValueError("config mode not advertised")
+        trace("set_config_option " + value)
+        self.mode = value
+        return SetSessionConfigOptionResponse()
 
     async def prompt(self, session_id, prompt, **kwargs):
         trace("prompt_start mode=" + str(self.mode))
         if os.environ.get("ACP_SMOKE_HANG"):
             await asyncio.sleep(60)
-        if self.mode not in ("read-only", "plan"):
-            raise ValueError("read-only mode was not selected")
+        expected = "plan" if os.environ.get("ACP_SMOKE_CONFIG_ONLY") else "read-only"
+        if self.mode != expected:
+            raise ValueError("advertised safe mode was not selected")
         trace("before_update")
         try:
             chunk = AgentMessageChunk(session_update="agent_message_chunk", content=TextContentBlock(type="text", text="ACP smoke OK"))
