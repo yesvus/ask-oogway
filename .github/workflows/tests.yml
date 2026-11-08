@@ -1,0 +1,20 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Run tests (including real ACP protocol smoke)
+        run: uv run --with agent-client-protocol==0.12.1 python -m unittest discover -s tests -v
