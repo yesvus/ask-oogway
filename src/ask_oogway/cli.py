@@ -113,7 +113,11 @@ def main() -> None:
         return
 
     if sys.argv[1:2] == ["init"]:
-        wizard.run()
+        try:
+            wizard.run()
+        except AskOogwayError as exc:
+            print(f"ask-oogway: {exc}", file=sys.stderr)
+            sys.exit(1)
         return
 
     if sys.argv[1:2] == ["history"]:
