@@ -306,8 +306,7 @@ def ask(prompt: str, *, timeout: int | None = None, quiet: bool = False, on_chun
             stalled = (time.monotonic() - last_activity) >= _STALL_TIMEOUT
             total = int(time.monotonic() - start)
             proc.kill()
-            partial = _tail(output.partial + "
-" + stderr)
+            partial = _tail(output.partial + "\n" + stderr)
             if stalled:
                 raise failure(
                     f"claude stalled with no output for {_STALL_TIMEOUT}s "
