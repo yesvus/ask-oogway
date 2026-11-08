@@ -37,7 +37,7 @@ class EchoAgent(Agent):
             raise ValueError("read-only mode was not selected")
         await self.conn.session_update(
             session_id=session_id,
-            update=AgentMessageChunk(content=TextContentBlock(text="ACP smoke OK")),
+            update=AgentMessageChunk(content=TextContentBlock(type="text", text="ACP smoke OK")),
         )
         return PromptResponse(stop_reason="end_turn")
 

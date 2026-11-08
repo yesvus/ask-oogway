@@ -89,7 +89,7 @@ async def _exchange(prompt: str, argv: list[str]) -> str:
         await connection.set_session_mode(session_id=session.session_id, mode_id=mode)
         await connection.prompt(
             session_id=session.session_id,
-            prompt=[TextContentBlock(text=f"{SYSTEM_PROMPT}\n\n{prompt}")],
+            prompt=[TextContentBlock(type="text", text=f"{SYSTEM_PROMPT}\n\n{prompt}")],
         )
     answer = "".join(client.chunks).strip()
     if not answer:

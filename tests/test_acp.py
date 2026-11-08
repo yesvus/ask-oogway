@@ -20,7 +20,7 @@ class FakeRequestError(Exception):
 
 
 class FakeText:
-    def __init__(self, text):
+    def __init__(self, text, type="text"):
         self.text = text
 
 
