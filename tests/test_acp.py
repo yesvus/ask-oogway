@@ -114,7 +114,7 @@ class TestACP(unittest.TestCase):
     def test_fails_closed_when_no_modes_advertised(self):
         mocked, _ = self.sdk(modes=None)
         with mocked, patch.dict(os.environ, {_env(): "opencode acp"}):
-            with self.assertRaisesRegex(AskOogwayError, "non-editing"):
+            with self.assertRaisesRegex(AskOogwayError, "supported advisory mode"):
                 acp.ask("hi")
 
     def test_deny_permissions_and_client_side_writes(self):
