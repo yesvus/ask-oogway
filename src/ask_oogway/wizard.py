@@ -6,6 +6,7 @@ from importlib import resources
 from pathlib import Path
 
 from .config import CONFIG_PATH, detect_provider
+from .errors import AskOogwayError
 from .providers import IMPLEMENTED, REGISTRY
 
 SKILL_DEST = Path.home() / ".claude" / "skills" / "ask-oogway" / "SKILL.md"
@@ -23,7 +24,15 @@ def _prompt_choice(
 ) -> str:
     hint = f" (default: {default})" if default else ""
     while True:
-        answer = input(f"{question} [{'/'.join(choices)}]{hint} ").strip().lower()
+        try:
+            answer = input(f"{question} [{'/'.join(choices)}]{hint} ").strip().lower()
+        except EOFError:
+            if default in choices:
+                print(f"stdin closed; using default: {default}")
+                return default
+            raise AskOogwayError(
+                "non-interactive init requires a valid default provider"
+            ) from None
         if not answer and default in choices:
             return default
         if answer in choices:
@@ -33,7 +42,11 @@ def _prompt_choice(
 
 def _confirm(question: str, default: bool = True) -> bool:
     suffix = "[Y/n]" if default else "[y/N]"
-    answer = input(f"{question} {suffix} ").strip().lower()
+    try:
+        answer = input(f"{question} {suffix} ").strip().lower()
+    except EOFError:
+        print("stdin closed; skipping optional skill installation")
+        return False
     if not answer:
         return default
     return answer in ("y", "yes")

@@ -24,6 +24,10 @@ Install ask-oogway from https://github.com/yesvus/ask-oogway using uv
 ask-oogway -m "say hi" returns an answer.
 ```
 
+When `ask-oogway init` runs without interactive input (for example from an
+agent shell), it selects the detected default and skips optional skill
+installation. An EOF will not crash the setup or silently approve extra writes.
+
 ## Usage
 
 ```sh
