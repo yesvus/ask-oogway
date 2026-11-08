@@ -13,7 +13,7 @@ def trace(text):
 
 
 from acp import Agent, InitializeResponse, NewSessionResponse, PromptResponse, run_agent
-from acp.schema import AgentMessageChunk, SessionMode, SessionModeState, SetSessionModeResponse, TextContentBlock
+from acp.schema import AgentMessageChunk, SessionMode, SessionModeState, SessionConfigOptionSelect, SessionConfigSelectOption, SetSessionModeResponse, TextContentBlock
 
 
 class EchoAgent(Agent):
@@ -31,7 +31,11 @@ class EchoAgent(Agent):
         trace("new_session")
         return NewSessionResponse(
             session_id="echo-test",
-            modes=SessionModeState(
+            config_options=[SessionConfigOptionSelect(
+                id="mode", name="Mode", category="mode", type="select", current_value="code",
+                options=[SessionConfigSelectOption(value="code", name="Code"), SessionConfigSelectOption(value="plan", name="Plan")],
+            )] if os.environ.get("ACP_SMOKE_CONFIG_ONLY") else None,
+            modes=None if os.environ.get("ACP_SMOKE_CONFIG_ONLY") else SessionModeState(
                 current_mode_id="code",
                 available_modes=[
                     SessionMode(id="code", name="Code"),
@@ -47,7 +51,7 @@ class EchoAgent(Agent):
 
     async def prompt(self, session_id, prompt, **kwargs):
         trace("prompt_start mode=" + str(self.mode))
-        if self.mode != "read-only":
+        if self.mode not in ("read-only", "plan"):
             raise ValueError("read-only mode was not selected")
         trace("before_update")
         try:

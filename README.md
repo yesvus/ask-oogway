@@ -64,6 +64,45 @@ It also offers to install `SKILL.md` to `~/.claude/skills/ask-oogway/`
 and `~/.config/opencode/skills/ask-oogway/`, so agents auto-discover
 ask-oogway without being told about it.
 
-## ACP agent transport (opt-in)\n\nACP standardizes the **client-to-agent** protocol. It does not replace direct model inference APIs such as OpenAI-compatible `/chat/completions`. To talk to an ACP-capable agent:\n\n```sh\nuv tool install --editable . --with agent-client-protocol\n# Install and authenticate an ACP agent separately (for example, OpenCode).\nexport ASK_OOGWAY_ACP_COMMAND='opencode acp'\nprintf 'provider = "acp"\\n' > ~/.config/ask-oogway/config.toml\nask-oogway -m 'Critique this architecture without changing anything.'\n```\n\nThe command is split into arguments without invoking a shell. This provider runs the maintained Python ACP SDK, creates a fresh session, uses an advertised `read-only`, `plan`, or `architect` mode, refuses agents without one, denies all permission requests, and does not offer client-side write/terminal operations or MCP servers. It preserves the existing CLI, history, and timeout behavior. The SDK is installed separately to keep the base CLI dependency-free.\n\n**Security limitation:** ACP is a transport and permission interface, **not a sandbox**. An agent can have its own built-in tools or a misleading `plan` mode and may bypass client permission requests. Use an OS/container read-only sandbox and trusted agent configuration if filesystem safety is required. ACP also does not grant ChatGPT/Codex subscription access; authenticate the selected agent according to its own rules.\n\nThe existing `claude` adapter and `openai` API provider remain supported for backwards compatibility. `ask-oogway` is an ACP **client** here; this is separate from issue #21, which proposes an MCP **server**.\n\n## Stack
+## ACP agent transport (opt-in)
+
+ACP is a **client-to-agent** protocol, not an alternative to a direct model API such as
+OpenAI-compatible `/chat/completions`. Install the official Python ACP SDK:
+
+```sh
+uv tool install --editable . --with agent-client-protocol
+# Install and authenticate OpenCode independently, then:
+export ASK_OOGWAY_ACP_COMMAND='opencode acp'
+mkdir -p ~/.config/ask-oogway
+printf 'provider = "acp"\n' > ~/.config/ask-oogway/config.toml
+ask-oogway -m 'Review this architecture, without changing files.'
+```
+
+The provider uses a fresh ACP session, selects an advertised `read-only` or `plan`
+mode (including modern `configOptions` mode catalogs), denies all ACP permission
+requests and client filesystem/terminal requests, and collects streamed answer text.
+Existing `claude` and `openai` providers, CLI output, history and background jobs
+are unchanged. `ask-oogway` never auto-detects ACP to avoid unintended migration.
+
+**OpenCode hardening:** When the ACP command is `opencode acp`, ask-oogway supplies
+a restrictive inline tool policy supporting both OpenCode V1 and V2. It disables
+edits, shell commands, subagents, external-directory operations and unapproved
+extensions while permitting ordinary read/search tools. Existing inline model
+settings are preserved. `plan` alone is *not* read-only, so the extra policy matters.
+
+**Security limit:** ACP itself is **not an OS sandbox**. An agent's native code,
+plugins or startup routines may still execute with the process user's privileges.
+OpenCode's tool policy is defense in depth, not a filesystem isolation guarantee.
+Use an isolated OS account/container if strict no-write semantics are required.
+Unknown ACP agents are rejected by default unless a separately isolated/trusted
+agent is explicitly approved with `ASK_OOGWAY_ACP_TRUST_AGENT=1`.
+
+**Authentication:** ACP does not grant ChatGPT/Codex subscription quotas. Your
+agent must be authenticated using its supported login method.
+
+This is ACP **client** support. Issue #21 separately tracks exposing ask-oogway
+as an MCP **server**.
+
+## Stack
 
 Python 3.12+, uv, stdlib only. See `pyproject.toml`.

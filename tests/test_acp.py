@@ -30,10 +30,12 @@ class FakeAgentChunk:
 
 
 class FakeConnection:
-    def __init__(self, client, *, modes=("read-only",), chunks=("Answer",)):
+    def __init__(self, client, *, modes=("read-only",), chunks=("Answer",), config_modes=(), stop_reason="end_turn"):
         self.client = client
         self.modes = modes
         self.chunks = chunks
+        self.config_modes = config_modes
+        self.stop_reason = stop_reason
         self.chosen = None
         self.seen_prompt = None
         self.cwd = None
@@ -46,6 +48,7 @@ class FakeConnection:
         self.cwd, self.mcp_servers = cwd, mcp_servers
         return SimpleNamespace(
             session_id="s1",
+            config_options=[SimpleNamespace(id="mode", options=[SimpleNamespace(value=x) for x in self.config_modes])],
             modes=SimpleNamespace(
                 available_modes=[SimpleNamespace(id=item) for item in self.modes]
             ) if self.modes is not None else None,
@@ -58,10 +61,11 @@ class FakeConnection:
         self.seen_prompt = prompt[0].text
         for chunk in self.chunks:
             await self.client.session_update("s1", FakeAgentChunk(FakeText(chunk)))
+        return SimpleNamespace(stop_reason=self.stop_reason)
 
 
 class TestACP(unittest.TestCase):
-    def sdk(self, *, modes=("read-only",), chunks=("Answer",), fail_spawn=False):
+    def sdk(self, *, modes=("read-only",), chunks=("Answer",), config_modes=(), stop_reason="end_turn", fail_spawn=False):
         state = {}
         fake_acp = types.ModuleType("acp")
         fake_schema = types.ModuleType("acp.schema")
@@ -73,7 +77,7 @@ class TestACP(unittest.TestCase):
         async def spawn(client, *argv, env=None):
             if fail_spawn:
                 raise FileNotFoundError(argv[0])
-            conn = FakeConnection(client, modes=modes, chunks=chunks)
+            conn = FakeConnection(client, modes=modes, chunks=chunks, config_modes=config_modes, stop_reason=stop_reason)
             state["conn"], state["argv"] = conn, argv
             yield conn, object()
 
@@ -127,6 +131,41 @@ class TestACP(unittest.TestCase):
         with self.assertRaises(FakeRequestError):
             asyncio.run(client.read_text_file("s1", "/tmp/x"))
 
+    def test_config_options_mode_for_current_opencode(self):
+        mocked, state = self.sdk(modes=None, config_modes=("build", "plan"))
+        with mocked, patch.dict(os.environ, {_env(): "opencode acp"}):
+            self.assertEqual(acp.ask("design review"), "Answer")
+        self.assertEqual(state["conn"].chosen, "plan")
+
+    def test_unknown_agent_requires_explicit_trust(self):
+        with patch.dict(os.environ, {_env(): "generic-agent --acp"}, clear=True):
+            with self.assertRaisesRegex(AskOogwayError, "TRUST_AGENT"):
+                acp.ask("hi")
+
+    def test_opencode_policy_fails_closed_and_keeps_existing_config(self):
+        with patch.dict(os.environ, {
+            "OPENCODE_CONFIG_CONTENT": '{"model":"vendor/model","permissions":[{"action":"edit","resource":"*","effect":"allow"}]}',
+        }):
+            import json
+            config = json.loads(acp._agent_env(["opencode", "acp"])["OPENCODE_CONFIG_CONTENT"])
+        self.assertEqual(config["model"], "vendor/model")
+        self.assertEqual(config["permission"]["bash"], "deny")
+        self.assertEqual(config["permission"]["edit"], "deny")
+        self.assertEqual(config["permissions"][-1]["effect"], "deny")
+        self.assertEqual(config["agents"]["plan"]["permissions"][0]["effect"], "deny")
+        self.assertEqual(config["agents"]["plan"]["permissions"][1]["action"], "read")
+
+    def test_invalid_opencode_inline_config(self):
+        with patch.dict(os.environ, {"OPENCODE_CONFIG_CONTENT": "invalid"}):
+            with self.assertRaisesRegex(AskOogwayError, "invalid OPENCODE"):
+                acp._agent_env(["opencode", "acp"])
+
+    def test_incomplete_turn_does_not_report_success(self):
+        mocked, _ = self.sdk(stop_reason="cancelled")
+        with mocked, patch.dict(os.environ, {_env(): "opencode acp"}):
+            with self.assertRaisesRegex(AskOogwayError, "did not finish"):
+                acp.ask("hi")
+
     def test_empty_answer_is_error(self):
         mocked, _ = self.sdk(chunks=())
         with mocked, patch.dict(os.environ, {_env(): "opencode acp"}):
@@ -135,7 +174,7 @@ class TestACP(unittest.TestCase):
 
     def test_missing_executable_is_actionable(self):
         mocked, _ = self.sdk(fail_spawn=True)
-        with mocked, patch.dict(os.environ, {_env(): "missing-acp --foo"}):
+        with mocked, patch.dict(os.environ, {_env(): "missing-acp --foo", "ASK_OOGWAY_ACP_TRUST_AGENT": "1"}):
             with self.assertRaisesRegex(AskOogwayError, "missing-acp"):
                 acp.ask("hi")
 

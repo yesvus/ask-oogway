@@ -1,8 +1,10 @@
 """ACP agent client provider (opt-in). Not an OS sandbox."""
 
 import asyncio
+import json
 import os
 import shlex
+from pathlib import Path
 
 from ..errors import AskOogwayError
 from ..prompts import SYSTEM_PROMPT
@@ -30,17 +32,98 @@ def _command() -> list[str]:
 
 
 def _safe_mode(session) -> str:
+    """Read either ACP's legacy session modes or its config-options catalog."""
+    ids = set()
     modes = getattr(session, "modes", None)
-    available = getattr(modes, "available_modes", ()) or ()
-    ids = {mode.id for mode in available}
+    for item in getattr(modes, "available_modes", ()) or ():
+        ids.add(item.id)
+    for option in getattr(session, "config_options", ()) or ():
+        if getattr(option, "id", None) != "mode":
+            continue
+        for item in getattr(option, "options", ()) or ():
+            if isinstance(getattr(item, "value", None), str):
+                ids.add(item.value)
+            else:  # ACP select-option groups
+                for nested in getattr(item, "options", ()) or ():
+                    if isinstance(getattr(nested, "value", None), str):
+                        ids.add(nested.value)
     for candidate in _SAFE_MODES:
         if candidate in ids:
             return candidate
     raise AskOogwayError(
-        "ACP agent does not advertise a non-editing session mode "
-        "(read-only/plan/architect); refusing to run. "
-        "Choose an agent with a non-editing mode."
+        "ACP agent does not advertise a supported advisory mode "
+        "(read-only/plan/architect), including via configOptions; refusing to run"
     )
+
+
+def _agent_env(argv: list[str]) -> dict[str, str]:
+    """Apply a deny-by-default tool policy for OpenCode; trust others explicitly.
+
+    ACP controls the client transport, not native agent tools. These tool
+    permissions are defense in depth, not an OS isolation boundary.
+    """
+    env = os.environ.copy()
+    command = Path(argv[0]).name.lower()
+    is_opencode = command in ("opencode", "opencode.exe") and "acp" in argv[1:]
+    if not is_opencode:
+        if env.get("ASK_OOGWAY_ACP_TRUST_AGENT") != "1":
+            raise AskOogwayError(
+                "unknown ACP agent tool policy; configure an isolated agent and "
+                "set ASK_OOGWAY_ACP_TRUST_AGENT=1 to explicitly opt in"
+            )
+        return env
+
+    try:
+        config = json.loads(env.get("OPENCODE_CONFIG_CONTENT") or "{}")
+    except json.JSONDecodeError as exc:
+        raise AskOogwayError("invalid OPENCODE_CONFIG_CONTENT JSON") from exc
+    if not isinstance(config, dict):
+        raise AskOogwayError("OPENCODE_CONFIG_CONTENT must contain a JSON object")
+
+    # OpenCode V1 uses 'permission', V2 uses ordered 'permissions'. The latter
+    # includes wildcard-deny first, then narrowly permitted inspection tools.
+    v1 = {
+        "*": "deny",
+        "read": {"*": "allow", "*.env": "deny", "*.env.*": "deny"},
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "allow",
+        "edit": "deny", "bash": "deny", "task": "deny",
+        "external_directory": "deny",
+    }
+    rules = [
+        {"action": "*", "resource": "*", "effect": "deny"},
+        *(
+            {"action": name, "resource": "*", "effect": "allow"}
+            for name in ("read", "glob", "grep", "webfetch", "websearch")
+        ),
+        {"action": "read", "resource": "*.env", "effect": "deny"},
+        {"action": "read", "resource": "*.env.*", "effect": "deny"},
+    ]
+    config["permission"] = v1
+    existing = config.get("permissions") or []
+    if not isinstance(existing, list):
+        raise AskOogwayError("OpenCode inline permissions must be a list")
+    config["permissions"] = [*existing, *rules]
+
+    # Agent-level permissions can override global permissions in OpenCode.
+    # The plan agent is the common ACP advisory mode. Restrict it as well.
+    v1_agents = config.get("agent") or {}
+    v2_agents = config.get("agents") or {}
+    if not isinstance(v1_agents, dict) or not isinstance(v2_agents, dict):
+        raise AskOogwayError("OpenCode inline agent configurations must be objects")
+    v1_plan = dict(v1_agents.get("plan") or {})
+    v1_plan["permission"] = v1
+    v1_agents["plan"] = v1_plan
+    v2_plan = dict(v2_agents.get("plan") or {})
+    current = v2_plan.get("permissions") or []
+    if not isinstance(current, list):
+        raise AskOogwayError("OpenCode plan permissions must be a list")
+    v2_plan["permissions"] = [*current, *rules]
+    v2_agents["plan"] = v2_plan
+    config["agent"] = v1_agents
+    config["agents"] = v2_agents
+    env["OPENCODE_CONFIG_CONTENT"] = json.dumps(config)
+    return env
 
 
 async def _exchange(prompt: str, argv: list[str]) -> str:
@@ -82,15 +165,19 @@ async def _exchange(prompt: str, argv: list[str]) -> str:
             raise RequestError.invalid_params({"reason": "client file access disabled"})
 
     client = ReadOnlyClient()
-    async with spawn_agent_process(client, *argv, env=os.environ.copy()) as (connection, _process):
+    async with spawn_agent_process(client, *argv, env=_agent_env(argv)) as (connection, _process):
         await connection.initialize(protocol_version=PROTOCOL_VERSION)
         session = await connection.new_session(cwd=os.getcwd(), mcp_servers=[])
         mode = _safe_mode(session)
         await connection.set_session_mode(session_id=session.session_id, mode_id=mode)
-        await connection.prompt(
+        result = await connection.prompt(
             session_id=session.session_id,
             prompt=[TextContentBlock(type="text", text=f"{SYSTEM_PROMPT}\n\n{prompt}")],
         )
+        if result.stop_reason != "end_turn":
+            raise AskOogwayError(
+                f"ACP agent did not finish the turn (stop reason: {result.stop_reason})"
+            )
     answer = "".join(client.chunks).strip()
     if not answer:
         raise AskOogwayError("ACP agent returned no text answer")
