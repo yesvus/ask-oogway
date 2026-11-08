@@ -22,6 +22,10 @@ from ask_oogway.providers import claude
 _FAKE_SCRIPT = """\
 #!/bin/sh
 case "$FAKE_MODE" in
+  partial-stall)
+    printf '%s\n' '{"type":"stream_event","event":{"delta":{"type":"text_delta","text":"partial background"}}}'
+    sleep 10
+    ;;
   trickle)
     for i in 1 2 3; do
       echo "line$i"
@@ -145,6 +149,38 @@ class TestJobs(unittest.TestCase):
                     (Path(running["dir"]) / "meta.json").read_text()
                 )
                 self.assertEqual(meta["status"], "running")
+
+    def test_detached_job_persists_partial_before_timeout(self):
+        with tempfile.TemporaryDirectory() as bintd:
+            self._write_fake(bintd)
+            with tempfile.TemporaryDirectory() as htd:
+                with (
+                    mock.patch.object(history, "HISTORY_DIR", Path(htd)),
+                    mock.patch.dict(os.environ, self._env(bintd, "partial-stall")),
+                    mock.patch("ask_oogway.runner.get_provider", return_value="claude"),
+                ):
+                    claude._STALL_TIMEOUT = 1
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        info = jobs.run_detached("a long prompt")
+                    self._track(info["pid"])
+                    d = Path(info["dir"])
+                    deadline = time.monotonic() + 6
+                    live_found = False
+                    while time.monotonic() < deadline:
+                        p = d / "output.txt"
+                        if p.is_file() and "partial background" in p.read_text():
+                            live_found = True
+                            break
+                        time.sleep(0.05)
+                    self.assertTrue(live_found, "partial output not persisted live")
+                    deadline = time.monotonic() + 6
+                    while time.monotonic() < deadline:
+                        meta = json.loads((d / "meta.json").read_text())
+                        if meta["status"] == "error":
+                            break
+                        time.sleep(0.05)
+                    self.assertEqual(meta["status"], "error")
+                    self.assertEqual((d / "output.txt").read_text(), "partial background")
 
     def test_run_detached_fast_silent(self):
         with tempfile.TemporaryDirectory() as bintd:
