@@ -70,7 +70,7 @@ class TestACP(unittest.TestCase):
             pass
 
         @asynccontextmanager
-        async def spawn(client, *argv):
+        async def spawn(client, *argv, env=None):
             if fail_spawn:
                 raise FileNotFoundError(argv[0])
             conn = FakeConnection(client, modes=modes, chunks=chunks)

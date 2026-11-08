@@ -50,11 +50,14 @@ class EchoAgent(Agent):
         if self.mode != "read-only":
             raise ValueError("read-only mode was not selected")
         trace("before_update")
-        await self.conn.session_update(
-            session_id=session_id,
-            update=AgentMessageChunk(content=TextContentBlock(type="text", text="ACP smoke OK")),
-        )
-        trace("after_update")
+        try:
+            chunk = AgentMessageChunk(content=TextContentBlock(type="text", text="ACP smoke OK"))
+            trace("chunk_created")
+            await self.conn.session_update(session_id=session_id, update=chunk)
+            trace("after_update")
+        except BaseException as exc:
+            trace("agent_error: " + repr(exc))
+            raise
         return PromptResponse(stop_reason="end_turn")
 
 
